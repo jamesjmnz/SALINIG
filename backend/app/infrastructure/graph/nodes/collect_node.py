@@ -1,0 +1,127 @@
+import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from app.core.config import settings
+from app.infrastructure.search.tavily_search import search
+from app.infrastructure.graph.trace import append_trace
+
+logger = logging.getLogger(__name__)
+
+
+def _normalise_results(data):
+    if not data:
+        return []
+    if isinstance(data, dict):
+        results = data.get("results")
+        if isinstance(results, list):
+            return results
+        return [data]
+    if isinstance(data, list):
+        return data
+    return [data]
+
+
+def _get_url(item):
+    if isinstance(item, dict):
+        return item.get("url") or item.get("link") or item.get("source")
+    return None
+
+
+def _clean_text(value):
+    if not value:
+        return ""
+    return " ".join(str(value).split())
+
+
+def _truncate(value, max_chars):
+    text = _clean_text(value)
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    return text[: max_chars - 3].rstrip() + "..."
+
+
+def _dedupe_sources(items):
+    seen = set()
+    deduped = []
+    for item in items:
+        url = _get_url(item)
+        key = url or str(item)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _format_source(item):
+    if not isinstance(item, dict):
+        return _truncate(item, settings.RAG_SOURCE_CHAR_LIMIT)
+
+    title = item.get("title") or item.get("name") or "Untitled source"
+    url = item.get("url") or item.get("link") or ""
+    published = item.get("published_date") or item.get("published") or item.get("date") or ""
+    score = item.get("score") or item.get("relevance_score") or ""
+    snippet = item.get("content") or item.get("snippet") or ""
+    raw_content = item.get("raw_content") or ""
+    content = raw_content or snippet
+
+    parts = [f"Title: {title}"]
+    if url:
+        parts.append(f"URL: {url}")
+    if published:
+        parts.append(f"Published: {published}")
+    if score:
+        parts.append(f"Search score: {score}")
+    if content:
+        parts.append(f"Content: {_truncate(content, settings.RAG_SOURCE_CHAR_LIMIT)}")
+    elif snippet:
+        parts.append(f"Snippet: {_truncate(snippet, settings.RAG_SOURCE_CHAR_LIMIT)}")
+    return "\n".join(parts)
+
+
+def _search_one(query):
+    try:
+        data = search(query)
+        return _normalise_results(data), None
+    except Exception as exc:
+        return [], str(exc)
+
+
+def collect_node(state):
+    iteration = state.get("iteration", 0) + 1
+    working_state = {**state, "iteration": iteration}
+
+    queries = state.get("search_queries") or []
+    logger.info("collect start — iteration=%d queries=%d", iteration, len(queries))
+    errors = []
+    new_items = []
+
+    with ThreadPoolExecutor(max_workers=max(1, len(queries))) as executor:
+        future_to_query = {executor.submit(_search_one, q): q for q in queries}
+        for future in as_completed(future_to_query):
+            items, err = future.result()
+            new_items.extend(items)
+            if err:
+                errors.append(err)
+
+    all_items = _dedupe_sources(list(state.get("collected_data") or []) + new_items)
+    logger.info("collect done — new_sources=%d total_sources=%d errors=%d", len(new_items), len(all_items), len(errors))
+    text = _truncate("\n\n".join([_format_source(item) for item in all_items]), settings.RAG_EVIDENCE_CHAR_LIMIT)
+    source_urls = [url for url in [_get_url(item) for item in all_items] if url]
+
+    return {
+        **working_state,
+        "collected_data": all_items,
+        "evidence_text": text,
+        "source_urls": source_urls,
+        "cycle_trace": append_trace(
+            working_state,
+            "collect",
+            "searched",
+            queries=queries,
+            new_sources=len(new_items),
+            total_sources=len(all_items),
+            evidence_chars=len(text),
+            errors=errors or None,
+        ),
+    }

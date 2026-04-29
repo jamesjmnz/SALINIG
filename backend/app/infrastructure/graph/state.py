@@ -1,0 +1,46 @@
+from typing import Any, TypedDict
+
+class SalinigState(TypedDict):
+    channel: str
+    monitoring_window: str
+    prioritize_themes: list[str]
+    place: str
+    search_queries: list[str]
+
+    collected_data: list
+    evidence_text: str
+    source_urls: list[str]
+    memory_context: str
+    retrieved_memories: list[dict[str, Any]]
+
+    sentiment: str
+    sentiment_label: str
+    sentiment_scores: dict[str, float]
+    sentiment_roberta_scores: dict[str, float]
+    sentiment_llm_scores: dict[str, float]
+    sentiment_roberta_error: str | None
+    credibility: str
+    final_report: str
+    best_report: str
+    best_quality_score: float
+    best_quality_breakdown: dict[str, float]
+    best_quality_feedback: str
+    best_knowledge_gaps: list[str]
+    best_blocking_issues: list[str]
+
+    iteration: int
+    max_iterations: int
+    quality_score: float
+    quality_breakdown: dict[str, float]
+    quality_passed: bool
+    quality_feedback: str
+    knowledge_gaps: list[str]
+    blocking_issues: list[str]
+
+    learning_note: str
+    learning_citations: list[str]
+    memory_saved: bool
+    memory_duplicate: bool
+    memory_error: str | None
+    memory_save_error: str | None
+    cycle_trace: list[dict[str, Any]]
