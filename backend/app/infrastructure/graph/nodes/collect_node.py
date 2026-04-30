@@ -53,9 +53,9 @@ def _dedupe_sources(items):
     return deduped
 
 
-def _format_source(item):
+def _format_source(item, max_chars):
     if not isinstance(item, dict):
-        return _truncate(item, settings.RAG_SOURCE_CHAR_LIMIT)
+        return _truncate(item, max_chars)
 
     title = item.get("title") or item.get("name") or "Untitled source"
     url = item.get("url") or item.get("link") or ""
@@ -73,15 +73,21 @@ def _format_source(item):
     if score:
         parts.append(f"Search score: {score}")
     if content:
-        parts.append(f"Content: {_truncate(content, settings.RAG_SOURCE_CHAR_LIMIT)}")
+        parts.append(f"Content: {_truncate(content, max_chars)}")
     elif snippet:
-        parts.append(f"Snippet: {_truncate(snippet, settings.RAG_SOURCE_CHAR_LIMIT)}")
+        parts.append(f"Snippet: {_truncate(snippet, max_chars)}")
     return "\n".join(parts)
 
 
-def _search_one(query):
+def _search_one(query, monitoring_window, runtime_options):
     try:
-        data = search(query)
+        data = search(
+            query,
+            monitoring_window=monitoring_window,
+            max_results=runtime_options.get("search_max_results"),
+            include_raw_content=runtime_options.get("include_raw_content"),
+            search_depth=runtime_options.get("search_depth"),
+        )
         return _normalise_results(data), None
     except Exception as exc:
         return [], str(exc)
@@ -92,12 +98,19 @@ def collect_node(state):
     working_state = {**state, "iteration": iteration}
 
     queries = state.get("search_queries") or []
+    runtime_options = state.get("runtime_options") or {}
+    evidence_char_limit = int(runtime_options.get("evidence_char_limit", settings.RAG_EVIDENCE_CHAR_LIMIT))
+    source_char_limit = int(runtime_options.get("source_char_limit", settings.RAG_SOURCE_CHAR_LIMIT))
     logger.info("collect start — iteration=%d queries=%d", iteration, len(queries))
     errors = []
     new_items = []
 
-    with ThreadPoolExecutor(max_workers=max(1, len(queries))) as executor:
-        future_to_query = {executor.submit(_search_one, q): q for q in queries}
+    max_workers = max(1, min(len(queries) or 1, settings.RAG_SEARCH_MAX_WORKERS))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_query = {
+            executor.submit(_search_one, q, state.get("monitoring_window"), runtime_options): q
+            for q in queries
+        }
         for future in as_completed(future_to_query):
             items, err = future.result()
             new_items.extend(items)
@@ -106,7 +119,7 @@ def collect_node(state):
 
     all_items = _dedupe_sources(list(state.get("collected_data") or []) + new_items)
     logger.info("collect done — new_sources=%d total_sources=%d errors=%d", len(new_items), len(all_items), len(errors))
-    text = _truncate("\n\n".join([_format_source(item) for item in all_items]), settings.RAG_EVIDENCE_CHAR_LIMIT)
+    text = _truncate("\n\n".join([_format_source(item, source_char_limit) for item in all_items]), evidence_char_limit)
     source_urls = [url for url in [_get_url(item) for item in all_items] if url]
 
     return {

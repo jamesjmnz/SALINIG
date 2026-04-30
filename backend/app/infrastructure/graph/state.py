@@ -4,7 +4,10 @@ class SalinigState(TypedDict):
     channel: str
     monitoring_window: str
     prioritize_themes: list[str]
+    focus_terms: list[str]
     place: str
+    analysis_mode: str
+    runtime_options: dict[str, Any]
     search_queries: list[str]
 
     collected_data: list
@@ -21,7 +24,9 @@ class SalinigState(TypedDict):
     sentiment_roberta_error: str | None
     credibility: str
     final_report: str
+    sentiment_report: dict[str, Any]
     best_report: str
+    best_sentiment_report: dict[str, Any]
     best_quality_score: float
     best_quality_breakdown: dict[str, float]
     best_quality_feedback: str
@@ -43,4 +48,5 @@ class SalinigState(TypedDict):
     memory_duplicate: bool
     memory_error: str | None
     memory_save_error: str | None
+    citation_validation: dict[str, Any]
     cycle_trace: list[dict[str, Any]]

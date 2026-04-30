@@ -38,17 +38,25 @@ class EvidenceAssessment(BaseModel):
 def _combined_assessment(state):
     llm = get_llm()
     themes = ", ".join(state.get("prioritize_themes") or [])
-    evidence = (state.get("evidence_text") or "")[: settings.RAG_EVIDENCE_CHAR_LIMIT]
+    focus_terms = ", ".join(state.get("focus_terms") or [])
+    runtime_options = state.get("runtime_options") or {}
+    evidence_char_limit = int(runtime_options.get("evidence_char_limit", settings.RAG_EVIDENCE_CHAR_LIMIT))
+    evidence = (state.get("evidence_text") or "")[:evidence_char_limit]
     user_message = f"""Place: {state["place"]}
 Monitoring window: {state["monitoring_window"]}
-Themes: {themes or "none"}
+Categories: {themes or "none"}
+Focus terms: {focus_terms or "none"}
 
 Evidence:
 {evidence}"""
 
     assessor = llm.with_structured_output(EvidenceAssessment)
     result = assessor.invoke([SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_message)])
-    ensemble = blend_sentiment_assessment(evidence, result.sentiment_scores)
+    ensemble = blend_sentiment_assessment(
+        evidence,
+        result.sentiment_scores,
+        enable_roberta=runtime_options.get("enable_roberta", settings.RAG_ENABLE_ROBERTA),
+    )
     return {
         "sentiment": format_sentiment_brief(
             ensemble,
