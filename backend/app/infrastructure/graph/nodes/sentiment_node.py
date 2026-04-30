@@ -42,19 +42,27 @@ def sentiment_node(state):
     llm = get_llm()
 
     themes = ", ".join(state.get("prioritize_themes") or [])
-    evidence = (state["evidence_text"] or "")[: settings.RAG_EVIDENCE_CHAR_LIMIT]
+    focus_terms = ", ".join(state.get("focus_terms") or [])
+    runtime_options = state.get("runtime_options") or {}
+    evidence_char_limit = int(runtime_options.get("evidence_char_limit", settings.RAG_EVIDENCE_CHAR_LIMIT))
+    evidence = (state["evidence_text"] or "")[:evidence_char_limit]
 
     logger.info("sentiment start — place=%s evidence_chars=%d", state["place"], len(evidence))
 
     user_message = f"""Place: {state["place"]}
-Themes: {themes or "none"}
+Categories: {themes or "none"}
+Focus terms: {focus_terms or "none"}
 
 Evidence:
 {evidence}"""
 
     assessor = llm.with_structured_output(SentimentOnlyAssessment)
     result = assessor.invoke([SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_message)])
-    ensemble = blend_sentiment_assessment(evidence, result.sentiment_scores)
+    ensemble = blend_sentiment_assessment(
+        evidence,
+        result.sentiment_scores,
+        enable_roberta=runtime_options.get("enable_roberta", settings.RAG_ENABLE_ROBERTA),
+    )
     sentiment = format_sentiment_brief(
         ensemble,
         result.sentiment,

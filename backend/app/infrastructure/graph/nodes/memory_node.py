@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 def memory_node(state):
     query_parts = [state["place"]] + list(state.get("prioritize_themes") or [])
+    query_parts.extend(state.get("focus_terms") or [])
     if state.get("knowledge_gaps"):
         query_parts.extend(state["knowledge_gaps"])
     query = " ".join(query_parts)

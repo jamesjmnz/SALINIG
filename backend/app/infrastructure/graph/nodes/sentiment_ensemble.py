@@ -82,8 +82,23 @@ def classify_sentiment_scores(scores: Any) -> str:
     return label.title()
 
 
-def blend_sentiment_assessment(evidence: str, llm_scores: Any) -> SentimentEnsembleResult:
+def blend_sentiment_assessment(
+    evidence: str,
+    llm_scores: Any,
+    *,
+    enable_roberta: bool | None = None,
+) -> SentimentEnsembleResult:
     normalized_llm_scores = normalize_scores(llm_scores)
+
+    if enable_roberta is False:
+        return SentimentEnsembleResult(
+            label=classify_sentiment_scores(normalized_llm_scores),
+            llm_scores=normalized_llm_scores,
+            roberta_scores=None,
+            blended_scores=normalized_llm_scores,
+            weights={"roberta": 0.0, "llm": 1.0},
+            roberta_error="RoBERTa sentiment is disabled for this analysis mode",
+        )
 
     try:
         roberta_scores = normalize_scores(infer_roberta_sentiment(evidence))
@@ -129,6 +144,9 @@ def format_sentiment_brief(ensemble: SentimentEnsembleResult, rationale: str) ->
 
 
 def infer_roberta_sentiment(evidence: str) -> dict[str, float]:
+    if not settings.RAG_ENABLE_ROBERTA:
+        raise RuntimeError("RoBERTa sentiment is disabled")
+
     chunks = _roberta_chunks(evidence)
     if not chunks:
         return {"negative": 0.0, "neutral": 1.0, "positive": 0.0}
@@ -198,6 +216,10 @@ def _load_roberta_model():
         model.eval()
         _roberta_cache[model_name] = (tokenizer, model)
     return _roberta_cache[model_name]
+
+
+def warm_roberta_model() -> None:
+    _load_roberta_model()
 
 
 def _roberta_chunks(evidence: str) -> list[str]:
