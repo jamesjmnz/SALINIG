@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { SIGNALS, AGENTS, CHART_DATA, CHART_LABELS } from '@/lib/consoleData';
+import type { AnalysisResponse, AnalysisStatus } from '@/lib/analysisApi';
 
 function LiveCounter({ target, suffix }: { target: number; suffix: string }) {
   const [val, setVal] = useState(0);
@@ -39,29 +40,31 @@ function MiniChart() {
   );
 }
 
-function ScoreRing() {
+function ScoreRing({ credibilityPct, qualityScore }: { credibilityPct: number; qualityScore: number }) {
+  const credibilityRatio = Math.max(0, Math.min(1, credibilityPct / 100));
+  const qualityPct = Math.round(Math.max(0, Math.min(1, qualityScore)) * 100);
   return (
     <>
       <div className="score-ring-wrap">
         <svg width="80" height="80" viewBox="0 0 80 80">
           <circle cx="40" cy="40" r="32" fill="none" stroke="var(--border)" strokeWidth="7"/>
           <circle cx="40" cy="40" r="32" fill="none" stroke="var(--green)" strokeWidth="7"
-            strokeDasharray={`${0.87 * 2 * Math.PI * 32} ${2 * Math.PI * 32}`}
+            strokeDasharray={`${credibilityRatio * 2 * Math.PI * 32} ${2 * Math.PI * 32}`}
             strokeLinecap="round" strokeDashoffset={2*Math.PI*32*0.25}
             style={{transition:'stroke-dasharray 1s ease'}}/>
-          <text x="40" y="44" textAnchor="middle" fontFamily="var(--font-instrument-serif), serif" fontSize="18" fill="var(--text)">87</text>
+          <text x="40" y="44" textAnchor="middle" fontFamily="var(--font-instrument-serif), serif" fontSize="18" fill="var(--text)">{credibilityPct}</text>
         </svg>
         <div className="score-ring-info">
-          <div className="score-ring-val">87<span style={{fontSize:18, color:'var(--muted)'}}>/100</span></div>
-          <div className="score-ring-label">Avg credibility today</div>
+          <div className="score-ring-val">{credibilityPct}<span style={{fontSize:18, color:'var(--muted)'}}>/100</span></div>
+          <div className="score-ring-label">Cached credibility</div>
         </div>
       </div>
       <div className="score-breakdown">
         {[
-          {label:'Source authority',      val:91, pct:'91'},
-          {label:'Corroboration',          val:85, pct:'85'},
-          {label:'Temporal consistency',   val:88, pct:'88'},
-          {label:'Logical coherence',      val:82, pct:'82'},
+          {label:'Quality gate',           val:qualityPct, pct:String(qualityPct)},
+          {label:'Verified signals',       val:credibilityPct, pct:String(credibilityPct)},
+          {label:'Source weighting',       val:credibilityPct, pct:String(credibilityPct)},
+          {label:'Memory readiness',       val:qualityPct, pct:String(qualityPct)},
         ].map((r, i) => (
           <div className="score-row" key={i}>
             <span className="score-row-label">{r.label}</span>
@@ -74,28 +77,78 @@ function ScoreRing() {
   );
 }
 
-export default function DashboardView() {
+function scoreClass(score: number) {
+  if (score >= 75) return 'high';
+  if (score >= 50) return 'medium';
+  return 'low';
+}
+
+function formatUpdatedAt(value: string | null) {
+  if (!value) return 'No cached run';
+  try {
+    return new Intl.DateTimeFormat('en', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(value));
+  } catch {
+    return 'Cached run';
+  }
+}
+
+interface DashboardViewProps {
+  analysis: AnalysisResponse | null;
+  latestUpdatedAt: string | null;
+  status: AnalysisStatus;
+}
+
+export default function DashboardView({ analysis, latestUpdatedAt, status }: DashboardViewProps) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const iv = setInterval(() => setTick(t => t+1), 3000);
     return () => clearInterval(iv);
   }, []);
 
+  const report = analysis?.sentiment_report;
+  const metrics = report?.metrics;
+  const signalCount = metrics?.signal_count ?? 0;
+  const credibilityPct = metrics?.credibility_pct ?? 87;
+  const qualityScore = analysis?.quality?.score ?? 0.87;
+  const cacheLabel = status === 'loading-cache'
+    ? 'Loading cache'
+    : status === 'running'
+      ? 'Analysis running'
+      : analysis
+        ? formatUpdatedAt(latestUpdatedAt)
+        : 'No cached run';
+  const liveSignals = report?.source_signals?.length
+    ? report.source_signals.map((signal, index) => ({
+        id: index + 1,
+        text: signal.summary || signal.title || 'Evidence-backed public signal',
+        source: signal.source || 'source',
+        url: signal.url,
+        time: report.updated_label || 'latest',
+        priority: signal.verification === 'unverified' ? 'high' : signal.sentiment === 'Negative' ? 'medium' : 'low',
+        score: String(signal.credibility_score ?? credibilityPct),
+        scoreClass: scoreClass(signal.credibility_score ?? credibilityPct),
+      }))
+    : SIGNALS.slice(0, 5);
+
   return (
     <div className="fade-in">
       <div className="stats-row">
         {[
-          { label:'Signals today',      val:2847 + tick, suffix:'',     cls:'',      delta:'+12%', up:true  },
-          { label:'Verified claims',    val:1204,         suffix:'',     cls:'green', delta:'+8%',  up:true  },
-          { label:'Flagged (low cred)', val:41,           suffix:'',     cls:'rust',  delta:'+2',   up:false },
-          { label:'Avg credibility',    val:87,           suffix:'/100', cls:'',      delta:'+3pts',up:true  },
+          { label:'Cached signals',     val:analysis ? signalCount : 2847 + tick, suffix:'',     cls:'',      delta:cacheLabel, up:true  },
+          { label:'Verified share',     val:metrics?.verified_pct ?? 100,         suffix:'%',     cls:'green', delta:analysis?.place ?? 'Philippines',  up:true  },
+          { label:'Misinfo risk',       val:metrics?.misinfo_risk_pct ?? 41,      suffix:'%',     cls:'rust',  delta:analysis?.monitoring_window ?? 'past 7 days',   up:false },
+          { label:'Credibility',        val:credibilityPct,                      suffix:'/100', cls:'',      delta:analysis?.analysis_mode ?? 'fast draft',up:true  },
         ].map((s, i) => (
           <div className="stat-card" key={i}>
             <div className="stat-label">{s.label}</div>
             <div className={`stat-val ${s.cls}`}><LiveCounter target={s.val} suffix={s.suffix} /></div>
             <div className="stat-delta">
               <span className={s.up ? 'delta-up' : 'delta-dn'}>{s.up ? '↑' : '↑'} {s.delta}</span>
-              <span style={{color:'var(--muted)', fontSize:11}}>vs yesterday</span>
             </div>
           </div>
         ))}
@@ -105,28 +158,37 @@ export default function DashboardView() {
         <div style={{display:'flex', flexDirection:'column', gap:16}}>
           <div className="panel">
             <div className="panel-head">
-              <span className="panel-title">Live Signal Feed</span>
-              <span className="panel-action">View all →</span>
+              <span className="panel-title">{analysis ? 'Cached Signal Feed' : 'Sample Signal Feed'}</span>
+              <span className="panel-action">{analysis ? 'cached' : 'sample'}</span>
             </div>
             <div className="signal-feed">
-              {SIGNALS.slice(0, 5).map(s => (
-                <div className="signal-item" key={s.id}>
-                  <div className={`signal-dot ${s.priority}`}></div>
-                  <div className="signal-content">
-                    <div className="signal-text">{s.text}</div>
-                    <div className="signal-meta">
-                      <span className="signal-source">{s.source}</span>
-                      <span className="signal-time">{s.time}</span>
+              {liveSignals.map(s => {
+                const sourceUrl = 'url' in s && typeof s.url === 'string' ? s.url : null;
+                return (
+                  <div className="signal-item" key={s.id}>
+                    <div className={`signal-dot ${s.priority}`}></div>
+                    <div className="signal-content">
+                      <div className="signal-text">{s.text}</div>
+                      <div className="signal-meta">
+                        {sourceUrl
+                          ? <a className="source-link" href={sourceUrl} target="_blank" rel="noreferrer">{s.source}</a>
+                          : <span className="signal-source">{s.source}</span>
+                        }
+                        <span className="signal-time">{s.time}</span>
+                      </div>
                     </div>
+                    <div className={`signal-score ${s.scoreClass}`}>{s.score}</div>
                   </div>
-                  <div className={`signal-score ${s.scoreClass}`}>{s.score}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           <div className="panel">
-            <div className="panel-head"><span className="panel-title">Credibility Trend</span></div>
+            <div className="panel-head">
+              <span className="panel-title">Sample Credibility Trend</span>
+              <span className="panel-action">demo</span>
+            </div>
             <MiniChart />
           </div>
         </div>
@@ -136,13 +198,13 @@ export default function DashboardView() {
             <div className="panel-head">
               <span className="panel-title">Credibility Score</span>
             </div>
-            <ScoreRing />
+            <ScoreRing credibilityPct={credibilityPct} qualityScore={qualityScore} />
           </div>
 
           <div className="panel">
             <div className="panel-head">
-              <span className="panel-title">Agent Status</span>
-              <span className="panel-action">Monitor →</span>
+              <span className="panel-title">Sample Agent Status</span>
+              <span className="panel-action">demo</span>
             </div>
             {AGENTS.map((a, i) => (
               <div className="agent-item" key={i}>
