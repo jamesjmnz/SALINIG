@@ -6,7 +6,11 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Local agent/editor settings
+# Local agent/editor settings and AI artifacts
+CLAUDE.md
+**/CLAUDE.md
+.claude/
+**/.claude/
 .claude/settings.local.json
 frontend/.claude/settings.local.json
 
@@ -83,4 +87,3 @@ models/
 *.pt
 *.pth
 *.onnx
-
