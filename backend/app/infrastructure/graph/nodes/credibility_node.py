@@ -42,12 +42,14 @@ def credibility_node(state):
     llm = get_llm()
 
     themes = ", ".join(state.get("prioritize_themes") or [])
+    focus_terms = ", ".join(state.get("focus_terms") or [])
     evidence = state["evidence_text"] or ""
 
     logger.info("credibility start — place=%s evidence_chars=%d", state["place"], len(evidence))
 
     user_message = f"""Place: {state["place"]}
-Themes: {themes or "none"}
+Categories: {themes or "none"}
+Focus terms: {focus_terms or "none"}
 
 Evidence:
 {evidence}"""

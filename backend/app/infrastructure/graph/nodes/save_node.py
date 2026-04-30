@@ -32,6 +32,7 @@ def save_node(state):
         "place": state["place"],
         "monitoring_window": state["monitoring_window"],
         "prioritize_themes": state.get("prioritize_themes") or [],
+        "focus_terms": state.get("focus_terms") or [],
         "quality_score": state.get("quality_score", 0.0),
         "source_urls": state.get("source_urls") or [],
         "citations": state.get("learning_citations") or [],

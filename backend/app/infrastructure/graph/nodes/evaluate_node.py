@@ -67,16 +67,16 @@ Score the report across six criteria. Each criterion has a stated weight, but th
    Important: if the raw evidence pool itself lacks quantified data or named entities, do not penalise the report for that absence — score based on how fully the report exploits the concrete details that do exist in the evidence.
 
 5. MEMORY INTEGRATION (weight: 10%)
-   Does the report make appropriate use of the prior memory context, specifically in Section 4 — Contextual Analysis? Penalize for:
+   Does the report make appropriate use of the prior memory context within the compact sentiment report when prior memory is relevant? Penalize for:
      - Ignoring relevant prior knowledge that would have meaningfully enriched the analysis
      - Over-relying on historical memory at the expense of current evidence
      - Applying prior memory without attribution, making it impossible to distinguish recalled from current knowledge
-   High score: memory is used transparently, selectively, and adds genuine analytical value in the Contextual Analysis section.
+   High score: memory is used transparently, selectively, and adds genuine analytical value without bloating the sentiment response.
 
 6. PRACTICAL USEFULNESS (weight: 10%)
-   Would this report provide genuine value to the intended audience (decision-maker, researcher, analyst)? Does it answer the core question implied by the topic and priority theme? Does the Recommendations section (Section 6) provide specific, actionable guidance? Penalize for:
+   Would this report provide genuine value to the intended audience (decision-maker, researcher, analyst)? Does it answer the core question implied by the topic and priority theme? Does the ACTIONABLE INSIGHTS section provide specific, actionable guidance? Penalize for:
      - Reports that describe the situation without drawing any conclusions
-     - Missing, vague, or generic Recommendations (e.g., "monitor the situation" without specifics)
+     - Missing, vague, or generic recommended actions (e.g., "monitor the situation" without specifics)
      - Failure to address the priority theme if one was specified
    High score: a reader comes away with a clear, actionable understanding of the situation and concrete next steps.
 
@@ -153,6 +153,39 @@ def _blocking_issues(result_issues, breakdown, gaps, feedback, threshold, passed
     return _dedupe_text(issues)[:6]
 
 
+def _citation_validation_issues(validation):
+    if not validation or validation.get("passed", True):
+        return []
+    issues = []
+    unsupported_urls = validation.get("unsupported_urls") or []
+    unsupported_titles = validation.get("unsupported_source_titles") or []
+    if unsupported_urls:
+        issues.append("Report cites URLs that were not present in collected evidence: " + "; ".join(unsupported_urls[:3]))
+    if unsupported_titles:
+        issues.append("Report cites source titles that were not present in collected evidence: " + "; ".join(unsupported_titles[:3]))
+    return issues
+
+
+def _apply_citation_penalty(breakdown, gaps, issues, validation):
+    citation_issues = _citation_validation_issues(validation)
+    if not citation_issues:
+        return breakdown, gaps, issues
+
+    adjusted = dict(breakdown)
+    if adjusted:
+        adjusted["evidence_grounding"] = min(adjusted.get("evidence_grounding", 0.0), 0.40)
+        adjusted["source_credibility_weighting"] = min(
+            adjusted.get("source_credibility_weighting", 0.0),
+            0.60,
+        )
+    adjusted_gaps = _dedupe_text(
+        list(gaps or [])
+        + ["Verify unsupported report citations against collected evidence sources."]
+    )
+    adjusted_issues = _dedupe_text(list(issues or []) + citation_issues)
+    return adjusted, adjusted_gaps, adjusted_issues
+
+
 def evaluate_node(state):
     llm = get_llm()
     threshold = settings.RAG_QUALITY_THRESHOLD
@@ -161,10 +194,14 @@ def evaluate_node(state):
     logger.info("evaluate start — place=%s iteration=%d threshold=%.2f", state["place"], iteration, threshold)
 
     themes = ", ".join(state.get("prioritize_themes") or [])
-    evidence = (state.get("evidence_text") or "")[: settings.RAG_EVIDENCE_CHAR_LIMIT]
+    focus_terms = ", ".join(state.get("focus_terms") or [])
+    runtime_options = state.get("runtime_options") or {}
+    evidence_char_limit = int(runtime_options.get("evidence_char_limit", settings.RAG_EVIDENCE_CHAR_LIMIT))
+    evidence = (state.get("evidence_text") or "")[:evidence_char_limit]
     user_message = f"""Place: {state["place"]}
 Monitoring window: {state["monitoring_window"]}
-Themes: {themes or "none"}
+Categories: {themes or "none"}
+Focus terms: {focus_terms or "none"}
 Quality threshold: {threshold}
 
 Evidence:
@@ -179,6 +216,9 @@ Sentiment analysis:
 Credibility analysis:
 {state.get("credibility") or "none"}
 
+Citation validation:
+{state.get("citation_validation") or "not checked"}
+
 Final report:
 {state.get("final_report") or "none"}"""
 
@@ -187,20 +227,27 @@ Final report:
         evaluator = llm.with_structured_output(EvaluationResult)
         result = evaluator.invoke([SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=user_message)])
         breakdown = _extract_breakdown(result)
-        score = _weighted_score(breakdown, result.score)
         feedback = result.feedback
         gaps = result.knowledge_gaps
+        raw_issues = result.blocking_issues
         error = None
     except Exception as exc:
-        score = 0.0
         breakdown = {}
         feedback = f"Evaluation failed: {exc}"
         gaps = ["evaluation failed"]
+        raw_issues = []
         error = str(exc)
 
+    breakdown, gaps, raw_issues = _apply_citation_penalty(
+        breakdown,
+        gaps,
+        raw_issues,
+        state.get("citation_validation") or {},
+    )
+    score = _weighted_score(breakdown, getattr(result, "score", None) if result is not None else None)
     passed = score >= threshold
     issues = _blocking_issues(
-        getattr(result, "blocking_issues", []) if result is not None else [],
+        raw_issues,
         breakdown,
         gaps,
         feedback,
@@ -211,6 +258,7 @@ Final report:
     logger.info("evaluate done — score=%.2f passed=%s threshold=%.2f", score, passed, threshold)
     previous_best = state.get("best_quality_score", -1.0)
     best_report = state.get("best_report") or ""
+    best_sentiment_report = state.get("best_sentiment_report") or {}
     best_score = previous_best
     best_breakdown = state.get("best_quality_breakdown") or {}
     best_feedback = state.get("best_quality_feedback") or ""
@@ -218,6 +266,7 @@ Final report:
     best_issues = state.get("best_blocking_issues") or []
     if score >= previous_best:
         best_report = state.get("final_report") or ""
+        best_sentiment_report = state.get("sentiment_report") or {}
         best_score = score
         best_breakdown = breakdown
         best_feedback = feedback
@@ -233,6 +282,7 @@ Final report:
         "knowledge_gaps": gaps,
         "blocking_issues": issues,
         "best_report": best_report,
+        "best_sentiment_report": best_sentiment_report,
         "best_quality_score": best_score,
         "best_quality_breakdown": best_breakdown,
         "best_quality_feedback": best_feedback,

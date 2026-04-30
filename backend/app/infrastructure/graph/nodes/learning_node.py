@@ -60,9 +60,11 @@ def learning_node(state):
     quality_score = state.get("quality_score", 0.0)
     logger.info("learn start — quality_score=%.2f", quality_score)
     themes = ", ".join(state.get("prioritize_themes") or [])
+    focus_terms = ", ".join(state.get("focus_terms") or [])
     user_message = f"""Place: {state["place"]}
 Monitoring window: {state["monitoring_window"]}
-Themes: {themes or "none"}
+Categories: {themes or "none"}
+Focus terms: {focus_terms or "none"}
 Quality score: {quality_score:.2f}
 
 Source URLs:
