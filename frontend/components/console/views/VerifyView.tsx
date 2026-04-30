@@ -5,8 +5,8 @@ export default function VerifyView() {
     <div className="fade-in">
       <div className="panel">
         <div className="panel-head">
-          <span className="panel-title">Verification Queue · 6 pending</span>
-          <span className="panel-action">Run all</span>
+          <span className="panel-title">Sample Verification Queue · 6 pending</span>
+          <span className="panel-action">demo data</span>
         </div>
         {SIGNALS.filter(s => s.scoreClass !== 'high').map((s, i) => (
           <div className="signal-item" key={i} style={{ padding: '16px 20px' }}>

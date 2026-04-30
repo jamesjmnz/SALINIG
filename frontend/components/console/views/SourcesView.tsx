@@ -5,8 +5,8 @@ export default function SourcesView() {
     <div className="fade-in">
       <div className="panel" style={{marginBottom:16}}>
         <div className="panel-head">
-          <span className="panel-title">Connected Sources · {SOURCES.filter(s => s.status === 'online').length}/{SOURCES.length} online</span>
-          <span className="panel-action">+ Add source</span>
+          <span className="panel-title">Sample Connected Sources · {SOURCES.filter(s => s.status === 'online').length}/{SOURCES.length} online</span>
+          <span className="panel-action">demo data</span>
         </div>
         <div className="source-grid">
           {SOURCES.map((s, i) => (

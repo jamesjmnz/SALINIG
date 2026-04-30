@@ -26,7 +26,10 @@ export default function AgentsView() {
         ))}
       </div>
       <div className="panel">
-        <div className="panel-head"><span className="panel-title">Agent Runtime</span></div>
+        <div className="panel-head">
+          <span className="panel-title">Sample Agent Runtime</span>
+          <span className="panel-action">demo data</span>
+        </div>
         <div style={{ padding: '4px 0' }}>
           {AGENTS.map((a, i) => (
             <div className="agent-item" key={i} style={{ padding: '14px 20px', gap: 14 }}>

@@ -4,9 +4,10 @@ import { VIEW_TITLES } from '@/lib/consoleData';
 
 interface TopbarProps {
   view: string;
+  onNewReport: () => void;
 }
 
-export default function Topbar({ view }: TopbarProps) {
+export default function Topbar({ view, onNewReport }: TopbarProps) {
   return (
     <div className="topbar">
       <div className="topbar-title">{VIEW_TITLES[view]}</div>
@@ -16,11 +17,11 @@ export default function Topbar({ view }: TopbarProps) {
           <span>Search signals, reports…</span>
         </div>
         <div className="topbar-status">
-          <div className="agent-status-dot running" style={{width:7, height:7}}></div>
-          Pipeline live
+          <div className="agent-status-dot idle" style={{width:7, height:7}}></div>
+          Console ready
         </div>
         <Link href="/" className="topbar-btn">← Back to site</Link>
-        <button className="topbar-btn primary">New report</button>
+        <button className="topbar-btn primary" onClick={onNewReport}>Analyze / Refresh</button>
       </div>
     </div>
   );

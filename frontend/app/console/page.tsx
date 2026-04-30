@@ -13,11 +13,27 @@ import SourcesView from '@/components/console/views/SourcesView';
 import AgentsView from '@/components/console/views/AgentsView';
 import SettingsView from '@/components/console/views/SettingsView';
 import { TWEAK_DEFAULTS, TweakState } from '@/lib/consoleData';
+import {
+  AnalysisOptions,
+  AnalysisProgressEvent,
+  AnalysisResponse,
+  AnalysisStatus,
+  AnalyzePayload,
+  fetchAnalysisOptions,
+  fetchLatestAnalysis,
+  streamAnalysis,
+} from '@/lib/analysisApi';
 
 export default function ConsolePage() {
   const [view, setView] = useState('dashboard');
   const [tweaks, setTweakState] = useState<TweakState>(TWEAK_DEFAULTS);
   const [tweaksOpen, setTweaksOpen] = useState(false);
+  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
+  const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions | null>(null);
+  const [latestUpdatedAt, setLatestUpdatedAt] = useState<string | null>(null);
+  const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>('loading-cache');
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgressEvent | null>(null);
 
   const setTweak = (k: string, v: string) => setTweakState(prev => ({ ...prev, [k]: v }));
 
@@ -36,12 +52,71 @@ export default function ConsolePage() {
     return () => window.removeEventListener('message', onMsg);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCachedAnalysis() {
+      setAnalysisStatus('loading-cache');
+      setAnalysisError(null);
+      setAnalysisProgress(null);
+      try {
+        const [options, latest] = await Promise.all([
+          fetchAnalysisOptions(),
+          fetchLatestAnalysis(),
+        ]);
+        if (cancelled) return;
+        setAnalysisOptions(options);
+        if (latest.cached && latest.analysis) {
+          setAnalysis(latest.analysis);
+          setLatestUpdatedAt(latest.updated_at ?? null);
+        }
+        setAnalysisStatus('idle');
+      } catch (error) {
+        if (cancelled) return;
+        setAnalysisStatus('error');
+        setAnalysisError(error instanceof Error ? error.message : 'Unable to load SALINIG analysis state.');
+        setAnalysisProgress(null);
+      }
+    }
+
+    loadCachedAnalysis();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleAnalyze = async (payload: AnalyzePayload) => {
+    setAnalysisStatus('running');
+    setAnalysisError(null);
+    setAnalysisProgress({ type: 'status', node: 'queued', label: 'Preparing analysis' });
+    try {
+      const result = await streamAnalysis(payload, event => {
+        setAnalysisProgress(event);
+      });
+      setAnalysis(result);
+      setLatestUpdatedAt(new Date().toISOString());
+      setAnalysisStatus('idle');
+    } catch (error) {
+      setAnalysisStatus('error');
+      setAnalysisError(error instanceof Error ? error.message : 'Analysis failed.');
+      setAnalysisProgress(null);
+    }
+  };
+
   const views: Record<string, React.ReactNode> = {
-    dashboard: <DashboardView />,
-    signals:   <SignalsView />,
+    dashboard: <DashboardView analysis={analysis} latestUpdatedAt={latestUpdatedAt} status={analysisStatus} />,
+    signals:   <SignalsView analysis={analysis} />,
     verify:    <VerifyView />,
-    sentiment: <SentimentView />,
-    reports:   <ReportsView />,
+    sentiment: (
+      <SentimentView
+        analysis={analysis}
+        options={analysisOptions}
+        latestUpdatedAt={latestUpdatedAt}
+        status={analysisStatus}
+        progress={analysisProgress}
+        error={analysisError}
+        onAnalyze={handleAnalyze}
+      />
+    ),
+    reports:   <ReportsView analysis={analysis} latestUpdatedAt={latestUpdatedAt} />,
     sources:   <SourcesView />,
     agents:    <AgentsView />,
     settings:  <SettingsView />,
@@ -51,7 +126,7 @@ export default function ConsolePage() {
     <div className="app">
       <Sidebar view={view} setView={setView} />
       <div className="main">
-        <Topbar view={view} />
+        <Topbar view={view} onNewReport={() => setView('sentiment')} />
         <div className="content">{views[view]}</div>
       </div>
       <ConsoleTweaks
