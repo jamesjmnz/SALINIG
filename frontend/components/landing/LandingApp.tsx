@@ -22,72 +22,6 @@ const staggerIn: Variants = {
   show: { transition: { staggerChildren: 0.12, delayChildren: 0.08 } },
 };
 
-const spamSignals = [
-  { label: 'SPAM', tone: 'rust', top: '15%', left: '7%', x: [-70, 12, 58], y: [18, -18, 10], rotate: [-10, 6, -5], delay: 0.1, duration: 9.5 },
-  { label: 'BOT BURST', tone: 'ink', top: '24%', left: '78%', x: [80, 4, -64], y: [-8, 18, -12], rotate: [9, -4, 8], delay: 1.1, duration: 10.8 },
-  { label: 'RUMOR', tone: 'amber', top: '40%', left: '13%', x: [-58, 0, 76], y: [8, -22, 16], rotate: [7, -7, 3], delay: 2.2, duration: 11.2 },
-  { label: 'CLAIM', tone: 'green', top: '55%', left: '80%', x: [66, -8, -74], y: [16, -18, 12], rotate: [-6, 5, -8], delay: 0.7, duration: 9.8 },
-  { label: 'CLICKBAIT', tone: 'rust', top: '68%', left: '9%', x: [-64, 14, 70], y: [-4, -24, 6], rotate: [5, -5, 9], delay: 3, duration: 12 },
-  { label: 'NOISE', tone: 'ink', top: '72%', left: '70%', x: [74, 2, -82], y: [12, -14, 20], rotate: [-9, 4, -4], delay: 1.8, duration: 10.4 },
-  { label: 'SOURCE?', tone: 'amber', top: '31%', left: '42%', x: [-48, 8, 44], y: [20, -16, 8], rotate: [-5, 5, -3], delay: 3.5, duration: 13 },
-] satisfies Array<{
-  label: string;
-  tone: 'rust' | 'green' | 'amber' | 'ink';
-  top: string;
-  left: string;
-  x: number[];
-  y: number[];
-  rotate: number[];
-  delay: number;
-  duration: number;
-}>;
-
-function SpamSignalField() {
-  const reduceMotion = useReducedMotion();
-
-  return (
-    <div className="spam-field" aria-hidden="true">
-      <motion.div
-        className="spam-filter"
-        initial={{ opacity: 0, scale: 0.86 }}
-        animate={reduceMotion ? { opacity: 0.22, scale: 1 } : { opacity: [0.1, 0.34, 0.18], scale: [0.92, 1.06, 0.96] }}
-        transition={{ duration: reduceMotion ? 0.4 : 5, repeat: reduceMotion ? 0 : Infinity, ease: 'easeInOut' }}
-      >
-        <span className="spam-filter-ring"></span>
-        <span className="spam-filter-line"></span>
-      </motion.div>
-
-      {spamSignals.map((signal) => (
-        <motion.span
-          className={`spam-chip ${signal.tone}`}
-          key={signal.label}
-          style={{ top: signal.top, left: signal.left }}
-          initial={{ opacity: 0, x: signal.x[0], y: signal.y[0], rotate: signal.rotate[0] }}
-          animate={
-            reduceMotion
-              ? { opacity: [0.12, 0.2, 0.12] }
-              : {
-                  opacity: [0, 0.58, 0.34, 0],
-                  x: signal.x,
-                  y: signal.y,
-                  rotate: signal.rotate,
-                  scale: [0.96, 1.04, 0.94],
-                }
-          }
-          transition={{
-            duration: reduceMotion ? 4 : signal.duration,
-            repeat: Infinity,
-            delay: signal.delay,
-            ease: 'easeInOut',
-          }}
-        >
-          {signal.label}
-        </motion.span>
-      ))}
-    </div>
-  );
-}
-
 // ─── Marquee ─────────────────────────────────────────────────
 function Marquee() {
   const items = [...MARQUEE_ITEMS, ...MARQUEE_ITEMS];
@@ -105,54 +39,119 @@ function Marquee() {
   );
 }
 
-// ─── Hero Card ───────────────────────────────────────────────
-function HeroCard() {
-  const reduceMotion = useReducedMotion();
-
+// ─── Console Dashboard ───────────────────────────────────────
+function ConsoleDashboard() {
   return (
-    <motion.div
-      className="hero-card"
-      initial={{ opacity: 0, y: 28, scale: 0.98 }}
-      animate={reduceMotion ? { opacity: 1, y: 0, scale: 1 } : { opacity: 1, y: [28, 0, -3, 0], scale: 1 }}
-      whileHover={reduceMotion ? undefined : { y: -6 }}
-      transition={{ duration: 0.8, delay: 0.42, ease: [0.22, 1, 0.36, 1] }}
-    >
-      <div className="hero-card-bar">
-        <div className="wdot wd-r"></div><div className="wdot wd-y"></div><div className="wdot wd-g"></div>
-        <span className="card-title">salinig / intelligence-report</span>
+    <div className="hc-wrap">
+      <div className="hc-chrome">
+        <div className="hc-chrome-dots">
+          <div className="wdot wd-r" /><div className="wdot wd-y" /><div className="wdot wd-g" />
+        </div>
+        <div className="hc-url">salinig.ai/console</div>
+        <div style={{ width: 52 }} />
       </div>
-      <div className="hero-card-body">
-        <div className="card-greeting">LIVE ANALYSIS · SIGNAL #2847</div>
-        <div className="card-question">Is the circulating claim about the infrastructure bill verified?</div>
-        <div className="card-response">
-          <div className="card-response-label">Synthesis Agent · 2 RAG Cycles · 18 Sources</div>
-          <div className="card-response-text">The core claim is <strong>substantially verified</strong> with minor factual discrepancies on budget figures. Three sources contradict the timeline assertion — flagged for review. Overall credibility: <strong>87/100</strong>.</div>
+      <div className="hc-layout">
+        <div className="hc-sb">
+          <div className="hc-sb-logo">
+            <div className="hc-sb-mark" />
+            <div>
+              <div className="hc-sb-name">Salinig</div>
+              <div className="hc-sb-sub">intelligence</div>
+            </div>
+          </div>
+          <div className="hc-sb-section">
+            <div className="hc-sb-label">Navigation</div>
+            {[
+              { label: 'Dashboard', active: true },
+              { label: 'Signals', badge: '3' },
+              { label: 'Reports' },
+              { label: 'Agents' },
+              { label: 'Sources' },
+              { label: 'Settings' },
+            ].map((item, i) => (
+              <div key={i} className={`hc-sb-item${item.active ? ' active' : ''}`}>
+                <div className="hc-sb-icon" />
+                {item.label}
+                {item.badge && <span className="hc-sb-badge">{item.badge}</span>}
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="card-scores">
-          <div className="card-score">
-            <div className="card-score-label">Credibility</div>
-            <div className="card-score-val green">87</div>
-            <div className="card-bar"><div className="card-bar-fill" style={{width:'87%'}}></div></div>
+        <div className="hc-main">
+          <div className="hc-topbar">
+            <span className="hc-topbar-title">Dashboard</span>
+            <div className="hc-topbar-right">
+              <div className="hc-status">
+                <span className="pulse-dot" />
+                Live
+              </div>
+              <div className="hc-btn">Analyze Signal</div>
+            </div>
           </div>
-          <div className="card-score">
-            <div className="card-score-label">Sentiment</div>
-            <div className="card-score-val">+0.62</div>
-            <div className="card-bar"><div className="card-bar-fill" style={{width:'62%', background:'var(--rust)'}}></div></div>
+          <div className="hc-content">
+            <div className="hc-stats">
+              {[
+                { label: 'CREDIBILITY', val: '87', green: true, delta: '+4 today' },
+                { label: 'SIGNALS', val: '2,847', delta: '+142 this week' },
+                { label: 'SOURCES', val: '18', delta: '+3 active' },
+                { label: 'RAG CYCLES', val: '12', delta: 'avg per run' },
+              ].map((s, i) => (
+                <div key={i} className="hc-stat">
+                  <div className="hc-stat-label">{s.label}</div>
+                  <div className={`hc-stat-val${s.green ? ' green' : ''}`}>{s.val}</div>
+                  <div className="hc-stat-delta">{s.delta}</div>
+                </div>
+              ))}
+            </div>
+            <div className="hc-panels">
+              <div className="hc-panel">
+                <div className="hc-panel-head">
+                  <span className="hc-panel-title">Signal Feed</span>
+                  <span className="hc-panel-action">View all →</span>
+                </div>
+                {[
+                  { text: 'Infrastructure bill claim: budget figures disputed by 3 independent sources', src: 'Reuters', time: '2m ago', score: '87', dot: 'high', sc: 'high' },
+                  { text: 'Market sentiment: tech sector showing mixed signals on AI regulation', src: 'Bloomberg', time: '8m ago', score: '72', dot: 'medium', sc: 'medium' },
+                  { text: 'Climate data: satellite imagery confirms deforestation claim', src: 'NASA DB', time: '14m ago', score: '94', dot: 'low', sc: 'high' },
+                  { text: 'Political statement: timeline inconsistency detected in press release', src: 'AP News', time: '23m ago', score: '58', dot: 'high', sc: 'low' },
+                ].map((sig, i) => (
+                  <div key={i} className="signal-item" style={{ cursor: 'default' }}>
+                    <div className={`signal-dot ${sig.dot}`} />
+                    <div className="signal-content">
+                      <div className="signal-text" style={{ fontSize: 12 }}>{sig.text}</div>
+                      <div className="signal-meta">
+                        <span className="signal-source">{sig.src}</span>
+                        <span className="signal-time">{sig.time}</span>
+                      </div>
+                    </div>
+                    <div className={`signal-score ${sig.sc}`}>{sig.score}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="hc-panel">
+                <div className="hc-panel-head">
+                  <span className="hc-panel-title">Active Agents</span>
+                </div>
+                {[
+                  { name: 'Query Gen', task: 'Generating Tavily queries', status: 'running' },
+                  { name: 'Collector', task: '5 results retrieved', status: 'running' },
+                  { name: 'Analyst', task: 'Credibility assessment', status: 'busy' },
+                  { name: 'Memory', task: 'Qdrant similarity search', status: 'idle' },
+                  { name: 'Evaluator', task: 'Scoring report: 87/100', status: 'idle' },
+                  { name: 'Learning', task: 'Awaiting pass threshold', status: 'idle' },
+                ].map((a, i) => (
+                  <div key={i} className="agent-item">
+                    <div className={`agent-status-dot ${a.status}`} />
+                    <div className="agent-name" style={{ fontSize: 11 }}>{a.name}</div>
+                    <div className="agent-task">{a.task}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="card-score">
-            <div className="card-score-label">Confidence</div>
-            <div className="card-score-val green">0.84</div>
-            <div className="card-bar"><div className="card-bar-fill" style={{width:'84%'}}></div></div>
-          </div>
-        </div>
-        <div className="card-sources">
-          <span className="card-source">Reuters</span>
-          <span className="card-source">AP News</span>
-          <span className="card-source">Gov. DB</span>
-          <span className="card-source">+15 more</span>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -481,67 +480,48 @@ export default function LandingApp() {
       {/* ── HERO ── */}
       <motion.section
         id="home"
-        style={{minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', padding:'100px 40px 0', position:'relative', overflow:'hidden'}}
         initial="hidden"
         animate="show"
         variants={staggerIn}
       >
-        {/* landscape SVG */}
-        <motion.svg
-          style={{position:'absolute',inset:0,width:'100%',height:'100%',pointerEvents:'none',zIndex:0}}
-          viewBox="0 0 1440 800"
-          preserveAspectRatio="xMidYMid slice"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1.1, ease: 'easeOut' }}
-        >
-          <defs>
-            <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="oklch(0.88 0.03 78)" />
-              <stop offset="60%" stopColor="oklch(0.92 0.025 72)" />
-              <stop offset="100%" stopColor="oklch(0.96 0.015 75)" />
-            </linearGradient>
-            <linearGradient id="hill1" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="oklch(0.78 0.06 135)" />
-              <stop offset="100%" stopColor="oklch(0.70 0.08 135)" />
-            </linearGradient>
-            <linearGradient id="hill2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="oklch(0.68 0.07 130)" />
-              <stop offset="100%" stopColor="oklch(0.60 0.09 130)" />
-            </linearGradient>
-            <linearGradient id="hill3" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="oklch(0.82 0.05 80)" />
-              <stop offset="100%" stopColor="oklch(0.75 0.07 78)" />
-            </linearGradient>
-          </defs>
-          <rect width="1440" height="800" fill="url(#sky)" />
-          <ellipse cx="720" cy="560" rx="900" ry="200" fill="oklch(0.88 0.04 78 / 0.5)" />
-          <path d="M0,620 Q200,480 400,540 Q600,600 720,520 Q840,440 1040,510 Q1240,580 1440,520 L1440,800 L0,800 Z" fill="url(#hill2)" opacity="0.5" />
-          <path d="M0,660 Q180,580 360,620 Q540,660 720,600 Q900,540 1080,590 Q1260,640 1440,600 L1440,800 L0,800 Z" fill="url(#hill1)" opacity="0.65" />
-          <path d="M0,720 Q240,680 480,700 Q720,720 960,690 Q1200,660 1440,700 L1440,800 L0,800 Z" fill="url(#hill3)" opacity="0.55" />
-          <rect y="760" width="1440" height="40" fill="oklch(0.975 0.010 78)" opacity="0.9" />
-        </motion.svg>
-
-        <SpamSignalField />
-
-        <motion.div style={{position:'relative', zIndex:1}} variants={staggerIn}>
-          <motion.div className="hero-badge" variants={riseIn} whileHover={{ y: -2 }}>
-            <div className="hero-badge-dot"></div>
-            New: Real-Time Evidence Verification v2
+        <div className="hero-inner">
+          <motion.div className="hero-copy" variants={staggerIn}>
+            <motion.div className="hero-badge" variants={riseIn} whileHover={{ y: -2 }}>
+              <div className="hero-badge-dot"></div>
+              Real-time evidence verification v2
+            </motion.div>
+            <motion.h1 className="hero-title" variants={riseIn}>
+              Public sentiment,<br/><em>verified</em> in seconds.
+            </motion.h1>
+            <motion.p className="hero-sub" variants={riseIn}>
+              Salinig turns noisy public discourse into verified, scored, and auditable intelligence with self-learning agents and cyclic retrieval.
+            </motion.p>
+            <motion.div className="hero-actions" variants={riseIn}>
+              <motion.button className="btn-primary" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => { window.location.href = '/console'; }}>Open console</motion.button>
+              <motion.button className="btn-outline" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => document.getElementById('how')?.scrollIntoView({block:'start'})}>See workflow</motion.button>
+            </motion.div>
+            <motion.div className="hero-metrics" variants={riseIn}>
+              <div className="hero-metric">
+                <strong>87</strong>
+                <span>credibility score</span>
+              </div>
+              <div className="hero-metric">
+                <strong>18</strong>
+                <span>sources checked</span>
+              </div>
+              <div className="hero-metric">
+                <strong>2</strong>
+                <span>RAG cycles</span>
+              </div>
+            </motion.div>
           </motion.div>
-          <motion.h1 className="hero-title" variants={riseIn}>
-            Public sentiment,<br/><em>verified</em> in seconds.
-          </motion.h1>
-          <motion.p className="hero-sub" variants={riseIn}>
-            Salinig is a self-learning multi-agent system for real-time credibility intelligence — powered by Cyclic RAG and live evidence triangulation.
-          </motion.p>
-          <motion.div className="hero-actions" variants={riseIn}>
-            <motion.button className="btn-primary" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => document.getElementById('features')?.scrollIntoView({block:'start'})}>Get started</motion.button>
-            <motion.button className="btn-outline" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => document.getElementById('how')?.scrollIntoView({block:'start'})}>See how it works</motion.button>
-          </motion.div>
-        </motion.div>
 
-        {tweaks.heroUI && <HeroCard />}
+          {tweaks.heroUI && (
+            <motion.div className="hero-visual" variants={riseIn}>
+              <ConsoleDashboard />
+            </motion.div>
+          )}
+        </div>
       </motion.section>
 
       {/* ── MARQUEE ── */}
@@ -570,10 +550,31 @@ export default function LandingApp() {
       <FAQSection />
 
       {/* ── CTA ── */}
-      <motion.div className="cta-section" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.25 }} transition={{ duration: 0.6 }}>
-        <h2 className="cta-title">Truth is a signal.<br/><em>We find it.</em></h2>
-        <p className="cta-sub">Set up in minutes. No infrastructure changes. Verified results from the first prompt.</p>
-        <motion.button className="btn-light" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }}>Request access</motion.button>
+      <motion.div className="cta-section" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.7 }}>
+        <div className="cta-inner">
+          <motion.div className="cta-eyebrow" initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.1 }}>
+            Start today
+          </motion.div>
+          <motion.h2 className="cta-title" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}>
+            Truth is a signal.<br/><em>We find it.</em>
+          </motion.h2>
+          <motion.p className="cta-sub" initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.28 }}>
+            Set up in minutes. No infrastructure changes. Verified results from the first prompt.
+          </motion.p>
+          <motion.div className="cta-actions" initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.36 }}>
+            <motion.button className="btn-light" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => { window.location.href = '/console'; }}>
+              Request access
+            </motion.button>
+            <motion.button className="cta-ghost" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => document.getElementById('how')?.scrollIntoView({ block: 'start' })}>
+              See how it works →
+            </motion.button>
+          </motion.div>
+          <motion.div className="cta-proof" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.48 }}>
+            <span className="cta-proof-item">87 avg credibility score</span>
+            <span className="cta-proof-item">2,847 signals analyzed</span>
+            <span className="cta-proof-item">Zero setup required</span>
+          </motion.div>
+        </div>
       </motion.div>
 
       {/* ── FOOTER ── */}
