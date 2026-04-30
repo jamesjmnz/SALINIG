@@ -22,6 +22,22 @@ class Settings(BaseSettings):
     RAG_SENTIMENT_LLM_WEIGHT: float = 0.60
     RAG_SENTIMENT_ROBERTA_MAX_SOURCES: int = 8
     RAG_SENTIMENT_ROBERTA_CHUNK_CHAR_LIMIT: int = 1000
+    RAG_ENABLE_ROBERTA: bool = True
+    RAG_WARM_ROBERTA_ON_STARTUP: bool = False
+
+    RAG_MAX_THEMES: int = 5
+    RAG_MAX_SEARCH_QUERIES: int = 10
+    RAG_SEARCH_MAX_WORKERS: int = 4
+    RAG_SIGNAL_MAX_WORKERS: int = 4
+
+    OPENAI_EMBEDDING_DIMENSIONS: int = 1536
+    EXTERNAL_REQUEST_TIMEOUT_SECONDS: float = 30.0
+    EXTERNAL_MAX_RETRIES: int = 2
+
+    SALINIG_API_KEY: str | None = None
+    SALINIG_RATE_LIMIT_REQUESTS: int = 20
+    SALINIG_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    SALINIG_CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
 
     class Config:
         env_file = "../.env"
