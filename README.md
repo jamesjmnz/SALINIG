@@ -18,24 +18,6 @@ The system is designed around context engineering: instead of relying on one lar
 
 ## Core Idea
 
-SALINIG runs a cyclic RAG loop:
-
-```text
-query_gen -> research -> analysis -> insight -> citation_validation -> evaluate
-                                                           |
-                                                           v
-                                              pass? -> learn -> save -> END
-                                                           |
-                                                           v
-                                              sync learning off? -> complete -> END
-                                                           |
-                                                           v
-                                              retry budget left? -> query_gen
-                                                           |
-                                                           v
-                                              no budget -> finalize -> END
-```
-
 The graph improves its own output during a run. If the evaluator finds weak grounding, missing evidence, or low usefulness, the system turns those deficiencies into targeted knowledge gaps, regenerates search queries, retrieves more evidence, and produces a revised report. If the report passes the quality threshold, SALINIG distills durable findings into Qdrant so future runs can recall them.
 
 ## Context Engineering by Node
@@ -86,24 +68,6 @@ This loop is bounded by `RAG_MAX_ITERATIONS`.
 ### Self-Learning vs Model Training
 
 SALINIG learns without updating model weights. It stores distilled, citation-backed learning notes in Qdrant. Later analyses retrieve those notes as prior memory, making the system improve through accumulated state rather than fine-tuning.
-
-## Pipeline Summary
-
-| Stage                  | File                                                           | Function                                                                         |
-| ---------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Query generation       | `backend/app/infrastructure/graph/nodes/query_gen_node.py`     | Creates search queries from place, themes, monitoring window, and knowledge gaps |
-| Research orchestration | `backend/app/infrastructure/graph/nodes/research_node.py`      | Runs web collection and memory retrieval in parallel                             |
-| Web collection         | `backend/app/infrastructure/graph/nodes/collect_node.py`       | Searches Tavily and formats bounded evidence                                     |
-| Memory retrieval       | `backend/app/infrastructure/graph/nodes/memory_node.py`        | Retrieves prior learning notes from Qdrant                                       |
-| Analysis               | `backend/app/infrastructure/graph/nodes/analysis_node.py`      | Produces sentiment and credibility briefs                                        |
-| Sentiment ensemble     | `backend/app/infrastructure/graph/nodes/sentiment_ensemble.py` | Blends RoBERTa and LLM sentiment scores                                          |
-| Insight synthesis      | `backend/app/infrastructure/graph/nodes/insight_node.py`       | Builds the structured sentiment report and rendered final report                 |
-| Citation validation    | `backend/app/infrastructure/graph/nodes/citation_validation_node.py` | Flags report citations not present in collected evidence                    |
-| Quality evaluation     | `backend/app/infrastructure/graph/nodes/evaluate_node.py`      | Scores report quality and controls retries                                       |
-| Learning               | `backend/app/infrastructure/graph/nodes/learning_node.py`      | Distills reusable memory from accepted reports                                   |
-| Memory save            | `backend/app/infrastructure/graph/nodes/save_node.py`          | Persists learning notes with dedupe                                              |
-| Completion             | `backend/app/infrastructure/graph/nodes/complete_node.py`      | Returns accepted reports when sync learning is disabled                          |
-| Finalization           | `backend/app/infrastructure/graph/nodes/finalize_node.py`      | Returns best attempt after max retries                                           |
 
 ## Quality Framework
 
