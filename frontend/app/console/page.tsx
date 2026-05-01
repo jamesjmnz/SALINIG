@@ -133,9 +133,9 @@ export default function ConsolePage() {
   };
 
   const views: Record<string, React.ReactNode> = {
-    dashboard: <DashboardView analysis={analysis} latestUpdatedAt={latestUpdatedAt} status={analysisStatus} />,
+    dashboard: <DashboardView analysis={analysis} latestUpdatedAt={latestUpdatedAt} status={analysisStatus} progress={analysisProgress} />,
     signals:   <SignalsView analysis={analysis} />,
-    verify:    <VerifyView analysis={analysis} />,
+    verify:    <VerifyView key={analysis?.final_report ?? 'verify-empty'} analysis={analysis} savedReportId={savedReportId} />,
     sentiment: (
       <SentimentView
         analysis={analysis}
