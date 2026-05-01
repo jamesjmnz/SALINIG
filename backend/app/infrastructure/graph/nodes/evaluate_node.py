@@ -186,6 +186,35 @@ def _apply_citation_penalty(breakdown, gaps, issues, validation):
     return adjusted, adjusted_gaps, adjusted_issues
 
 
+def _apply_claim_verification_penalty(breakdown, gaps, issues, verification):
+    if not verification or not verification.get("checked"):
+        return breakdown, gaps, issues
+
+    contradicted = int(verification.get("contradicted_claim_count") or 0)
+    unsupported = int(verification.get("unsupported_claim_count") or 0)
+    if contradicted <= 0 and unsupported <= 0:
+        return breakdown, gaps, issues
+
+    adjusted = dict(breakdown)
+    if contradicted > 0:
+        adjusted["evidence_grounding"] = min(adjusted.get("evidence_grounding", 0.0), 0.45)
+        adjusted["source_credibility_weighting"] = min(
+            adjusted.get("source_credibility_weighting", 0.0),
+            0.55,
+        )
+    elif unsupported > 0:
+        adjusted["evidence_grounding"] = min(adjusted.get("evidence_grounding", 0.0), 0.6)
+
+    claim_issues = []
+    if contradicted > 0:
+        claim_issues.append(f"{contradicted} claim(s) were contradicted during source verification.")
+    if unsupported > 0:
+        claim_issues.append(f"{unsupported} claim(s) remain weakly supported or unsupported.")
+    adjusted_gaps = _dedupe_text(list(gaps or []) + ["Resolve claim-to-source support gaps before delivery."])
+    adjusted_issues = _dedupe_text(list(issues or []) + claim_issues)
+    return adjusted, adjusted_gaps, adjusted_issues
+
+
 def evaluate_node(state):
     llm = get_llm()
     threshold = settings.RAG_QUALITY_THRESHOLD
@@ -219,6 +248,9 @@ Credibility analysis:
 Citation validation:
 {state.get("citation_validation") or "not checked"}
 
+Claim verification:
+{state.get("claim_verification") or "not checked"}
+
 Final report:
 {state.get("final_report") or "none"}"""
 
@@ -243,6 +275,12 @@ Final report:
         gaps,
         raw_issues,
         state.get("citation_validation") or {},
+    )
+    breakdown, gaps, raw_issues = _apply_claim_verification_penalty(
+        breakdown,
+        gaps,
+        raw_issues,
+        state.get("claim_verification") or {},
     )
     score = _weighted_score(breakdown, getattr(result, "score", None) if result is not None else None)
     passed = score >= threshold

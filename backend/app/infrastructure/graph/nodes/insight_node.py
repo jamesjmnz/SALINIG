@@ -119,9 +119,10 @@ def _source_catalog(items: list[Any]) -> list[dict[str, Any]]:
     for index, item in enumerate(items or [], start=1):
         url = _source_url(item)
         domain = _domain_from_url(url)
+        source_index = item.get("source_index") if isinstance(item, dict) and item.get("source_index") else index
         catalog.append(
             {
-                "index": index,
+                "index": int(source_index),
                 "title": _source_title(item),
                 "url": url,
                 "source": domain or _source_title(item),
@@ -417,6 +418,7 @@ def _build_source_signals(
         credibility_scores.append(credibility_score)
         source_signals.append(
             {
+                "source_index": signal.source_index,
                 "source": source.get("source") or _domain_from_url(source.get("url")) or source.get("title", ""),
                 "title": source.get("title", ""),
                 "url": source.get("url"),
