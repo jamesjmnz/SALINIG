@@ -27,8 +27,23 @@ def _store_path() -> Path:
 
 
 def _sanitize_response(response: AnalysisResponse) -> AnalysisResponse:
+    diagnostics = response.diagnostics
+    sanitized_diagnostics = None
+    if diagnostics is not None:
+        sanitized_diagnostics = diagnostics.model_copy(
+            update={
+                "collected_sources": [],
+                "retrieved_memories": [],
+                "cycle_trace": [],
+                "learning_note": "",
+                "learning_citations": [],
+                "memory_error": None,
+                "memory_save_error": None,
+            },
+            deep=True,
+        )
     return response.model_copy(
-        update={"diagnostics": None},
+        update={"diagnostics": sanitized_diagnostics},
         deep=True,
     )
 
