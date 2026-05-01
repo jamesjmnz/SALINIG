@@ -24,12 +24,12 @@ The graph improves its own output during a run. If the evaluator finds weak grou
 
 | Node        | Context Engineering Mechanism                                                               | Implementation                                                                                                             |
 | ----------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `query_gen` | Query planning from user intent, place, themes, monitoring window, and prior evaluator gaps | Builds Tavily-ready queries deterministically by default, with optional LLM query generation via `RAG_USE_LLM_QUERY_GEN`   |
+| `query_gen` | Query planning from user intent, place, themes, monitoring window, and prior evaluator gaps | Builds query targets from evaluator `knowledge_gaps`, else `focus_terms`, else categories; generates Tavily-ready queries deterministically by default, with optional LLM query generation via `RAG_USE_LLM_QUERY_GEN` |
 | `research`  | Parallel evidence and memory retrieval                                                      | Runs `collect_node` and `memory_node` concurrently with `ThreadPoolExecutor`                                               |
-| `collect`   | Web evidence acquisition                                                                    | Fans out Tavily queries in parallel, deduplicates URLs, preserves titles, URLs, published dates, scores, snippets, and optional raw content |
+| `collect`   | Web evidence acquisition                                                                    | Fans out Tavily queries in parallel, deduplicates by URL, preserves titles, URLs, published dates, scores, snippets, and optional raw content, then compacts evidence text to per-mode limits |
 | `memory`    | Memory-augmented context recall                                                             | Searches Qdrant with OpenAI embeddings and returns prior learning notes before synthesis                                   |
 | `analysis`  | Compact auxiliary intelligence                                                              | Runs a combined LLM sentiment and credibility assessment, then blends sentiment with RoBERTa scores                        |
-| `insight`   | Structured sentiment-report synthesis                                                       | Generates an overall sentiment brief, source-level signals, weighted metrics, and actionable insights                       |
+| `insight`   | Structured sentiment-report synthesis                                                       | Generates an overall sentiment brief, then parallel source-level signals for every collected source, credibility-weighted metrics, and actionable insights |
 | `citation_validation` | Citation integrity guard                                                           | Checks that cited URLs and `Src:` labels in the rendered report exist in collected evidence                                 |
 | `evaluate`  | Quality gate and retry controller                                                           | Scores six criteria, computes the weighted score in code, records feedback, and drives pass/retry/finalize routing         |
 | `learn`     | Durable memory distillation                                                                 | Converts a passing report into reusable memory notes with citations                                                        |
@@ -111,6 +111,13 @@ The rendered `sentiment_report` contains:
 - credibility-weighted metrics for `negative_pct`, `neutral_pct`, `positive_pct`, `credibility_pct`, `verified_pct`, `misinfo_risk_pct`, and `signal_count`
 - up to 5 `actionable_insights`
 
+Implementation notes:
+
+- Source-level signals are generated in parallel with `ThreadPoolExecutor`
+- If source-level drafting fails for a source, SALINIG falls back to a deterministic source summary instead of dropping that signal
+- If the draft under-covers the evidence pool, the report is topped up so `source_signals` still covers all collected sources
+- When source-level signals are available, `overall_label` is derived from the credibility-weighted source sentiment mix rather than only the model-level sentiment label
+
 ## Memory System
 
 Memory is implemented in `backend/app/infrastructure/memory/qdrant_memory.py`.
@@ -138,12 +145,15 @@ Backend base path:
 
 Implemented analysis endpoints:
 
-| Method | Path                      | Purpose                                                                 |
-| ------ | ------------------------- | ----------------------------------------------------------------------- |
-| `POST` | `/api/v1/analysis/`       | Run a synchronous analysis and return the final response                |
-| `POST` | `/api/v1/analysis/stream` | Run an analysis as Server-Sent Events with node-by-node progress        |
-| `GET`  | `/api/v1/analysis/latest` | Return the latest cached successful analysis without diagnostics        |
-| `GET`  | `/api/v1/analysis/options` | Return supported Philippine locations, categories, and UI defaults     |
+| Method | Path                               | Purpose                                                                 |
+| ------ | ---------------------------------- | ----------------------------------------------------------------------- |
+| `POST` | `/api/v1/analysis/`                | Run a synchronous analysis and return the final response                |
+| `POST` | `/api/v1/analysis/stream`          | Run an analysis as Server-Sent Events with node-by-node progress        |
+| `GET`  | `/api/v1/analysis/latest`          | Return the most recent saved/cached analysis record without diagnostics |
+| `GET`  | `/api/v1/analysis/saved`           | List archived saved-report summaries for the console                    |
+| `POST` | `/api/v1/analysis/saved`           | Persist a report to the saved-report archive                            |
+| `GET`  | `/api/v1/analysis/saved/{reportId}` | Return the full archived report record for a saved report               |
+| `GET`  | `/api/v1/analysis/options`         | Return supported Philippine locations, categories, and UI defaults      |
 
 Additional service endpoints:
 
@@ -172,6 +182,7 @@ Request behavior and validation:
 - `place` is normalized to a supported Philippine scope only; non-Philippine locations are rejected
 - `prioritize_themes` must map to the fixed SALINIG public-intelligence categories, with alias normalization such as `infrastructure` -> `Transportation & Infrastructure`
 - `focus_terms` accepts optional free-form subthemes and is deduplicated
+- `focus_terms` is capped by the same `RAG_MAX_THEMES` limit used for `prioritize_themes`
 - `analysis_mode` supports:
   - `fast_draft`: 1 cycle, basic Tavily depth, up to 6 queries, no RoBERTa, no synchronous learning save
   - `full`: configured retry budget, advanced Tavily depth, raw-content retrieval, RoBERTa enabled, optional synchronous learning save
@@ -185,11 +196,19 @@ Response highlights:
 - `memory_saved` and `memory_duplicate`: Qdrant writeback status
 - transitional fields such as `quality_score` and `quality_breakdown` are still returned for existing callers
 
+Saved-report archive behavior:
+
+- `POST /api/v1/analysis/saved` accepts a full `AnalysisResponse` payload and persists a sanitized copy with `diagnostics` removed
+- Saved reports are stored newest-first in `backend/.salinig/saved_reports.json` by default, configurable via `SALINIG_SAVED_REPORTS_PATH`
+- Archive length is capped by `SALINIG_SAVED_REPORTS_LIMIT`
+- Reports that did not pass the quality gate can still be saved; the frontend surfaces those as review items in the archive
+- `GET /api/v1/analysis/latest` returns the newest archived/cached record when one exists, otherwise `cached: false`
+
 Security and runtime protections:
 
 - If `SALINIG_API_KEY` is set, requests must include `X-API-Key`
 - Analysis endpoints apply an in-memory per-client or per-key rate limit
-- `/latest` caches only quality-passing analyses and strips diagnostics before storage
+- Saved-report storage strips diagnostics before persistence so archived records stay presentation-friendly
 - Citation validation runs before evaluation; unsupported citations reduce quality and create actionable blocking issues
 
 ## Frontend
@@ -201,21 +220,23 @@ Current UI areas include:
 - Landing page
 - Dashboard
 - Live signals
-- Verification queue
-- Sentiment analysis
-- Reports
-- Data sources
-- Agent monitor
+- Verification workspace
+- Sentiment analysis runner
+- Saved reports archive
 - Settings
 
 Current frontend behavior:
 
 - The console loads analysis options from `GET /api/analysis/options`
-- On load, it fetches the latest cached successful report from `GET /api/analysis/latest`
+- On load, it fetches the latest saved/cached report from `GET /api/analysis/latest`
 - New runs are executed through `POST /api/analysis/stream`, and the UI renders live node progress from Server-Sent Events
 - Next.js route handlers in `frontend/app/api/analysis/*` proxy requests to the backend and forward the optional API key
-- `Sentiment`, `Reports`, and parts of `Dashboard` and `Signals` render live backend analysis when available
-- `Verify`, `Sources`, and `Agents` currently remain demo/sample views backed by `frontend/lib/consoleData.ts`
+- `Sentiment` lets users choose place, monitoring window, analysis mode, categories, and comma-separated focus terms before launching a run
+- `Sentiment` can save the current run to the archive, including runs that failed the quality gate
+- `Reports` is backed by the saved-report archive endpoints and loads both summary and detail records
+- `Signals`, `Verify`, and the live portions of `Dashboard` render backend `sentiment_report` data when available
+- `Dashboard` still includes demo-only credibility trend and agent-status cards when no dedicated backend feed exists
+- `Settings` is currently a presentational/local-state console surface rather than a persisted backend configuration panel
 
 ## Tech Stack
 
@@ -288,6 +309,8 @@ SALINIG_API_KEY=
 SALINIG_RATE_LIMIT_REQUESTS=20
 SALINIG_RATE_LIMIT_WINDOW_SECONDS=60
 SALINIG_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+SALINIG_SAVED_REPORTS_PATH=backend/.salinig/saved_reports.json
+SALINIG_SAVED_REPORTS_LIMIT=50
 ```
 
 Frontend/runtime proxy variables:
@@ -310,16 +333,17 @@ cd backend
 ../backend/venv/bin/uvicorn app.main:app --reload
 ```
 
-If you want one shortcut that starts Qdrant and then launches the backend:
+If you want one shortcut that starts Qdrant, the frontend, and then launches the backend:
 
 ```bash
 ./run_backend_stack.sh
 ```
 
-The API will be available at:
+The services will be available at:
 
 ```text
-http://localhost:8000
+Frontend: http://localhost:3000
+Backend API: http://localhost:8000
 ```
 
 ### Frontend
@@ -354,6 +378,7 @@ Coverage includes:
 - cyclic retry and best-report promotion behavior
 - streaming endpoint contract
 - request validation, API-key enforcement, and rate limiting
+- saved-report archive creation, listing, detail retrieval, and latest bootstrap behavior
 - citation validation penalties
 - query-budget controls and fast-draft/full mode behavior
 - sentiment-report rendering and source-signal metrics
@@ -376,7 +401,7 @@ npm run lint
 | Request/response schema | `backend/app/schemas/analysis_schema.py`             |
 | Input defaults          | `backend/app/domain/analysis_defaults.py`            |
 | Security and rate limit | `backend/app/core/security.py`, `backend/app/core/rate_limit.py` |
-| Latest-analysis cache   | `backend/app/domain/services/analysis_cache.py`      |
+| Saved-report cache/archive | `backend/app/domain/services/analysis_cache.py`   |
 | Graph builder           | `backend/app/infrastructure/graph/graph_builder.py`  |
 | Graph state             | `backend/app/infrastructure/graph/state.py`          |
 | Tavily search           | `backend/app/infrastructure/search/tavily_search.py` |
@@ -404,7 +429,7 @@ npm run lint
 - Citation validation before quality scoring
 - Structured sentiment report with source-level signals, weighted metrics, and actionable insights
 - Streaming analysis progress over SSE
-- Latest successful analysis cache for frontend bootstrapping
+- File-backed saved-report archive plus latest-report bootstrap for the frontend
 - Philippines-first location and category normalization
 - `cycle_trace` observability returned in API responses
 - Next.js proxy-backed console frontend for monitoring and presentation
