@@ -1,17 +1,24 @@
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import verify_api_key
-from app.domain.services.analysis_cache import latest_successful_analysis
+from app.domain.services.analysis_cache import (
+    get_saved_report,
+    latest_successful_analysis,
+    list_saved_reports,
+    save_analysis_report,
+)
 from app.domain.services.analysis_service import AnalysisService
 from app.schemas.analysis_schema import (
     AnalysisOptions,
     AnalysisResponse,
     AnalyzeRequest,
     LatestAnalysisResponse,
+    SavedAnalysisListResponse,
+    SavedAnalysisRecord,
 )
 
 router = APIRouter(
@@ -57,6 +64,24 @@ def analyze_stream(request: AnalyzeRequest, _: None = Depends(enforce_rate_limit
 @router.get("/latest", response_model=LatestAnalysisResponse, response_model_exclude_none=True)
 def latest() -> LatestAnalysisResponse:
     return latest_successful_analysis()
+
+
+@router.get("/saved", response_model=SavedAnalysisListResponse, response_model_exclude_none=True)
+def saved_reports() -> SavedAnalysisListResponse:
+    return list_saved_reports()
+
+
+@router.post("/saved", response_model=SavedAnalysisRecord, response_model_exclude_none=True)
+def save_report(request: AnalysisResponse) -> SavedAnalysisRecord:
+    return save_analysis_report(request)
+
+
+@router.get("/saved/{report_id}", response_model=SavedAnalysisRecord, response_model_exclude_none=True)
+def saved_report_detail(report_id: str) -> SavedAnalysisRecord:
+    record = get_saved_report(report_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Saved report not found.")
+    return record
 
 
 @router.get("/options", response_model=AnalysisOptions)

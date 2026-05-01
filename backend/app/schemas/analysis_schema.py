@@ -181,4 +181,29 @@ class AnalysisResponse(BaseModel):
 class LatestAnalysisResponse(BaseModel):
     cached: bool = False
     updated_at: str | None = None
+    report_id: str | None = None
     analysis: AnalysisResponse | None = None
+
+
+class SavedAnalysisSummary(BaseModel):
+    report_id: str
+    saved_at: str
+    title: str
+    place: str
+    monitoring_window: MonitoringWindow
+    analysis_mode: AnalysisMode
+    overall_label: str = ""
+    quality_score: float = Field(0.0, ge=0.0, le=1.0)
+    quality_passed: bool = False
+    signal_count: int = Field(0, ge=0)
+    prioritize_themes: list[str] = Field(default_factory=list)
+
+
+class SavedAnalysisRecord(BaseModel):
+    report_id: str
+    saved_at: str
+    analysis: AnalysisResponse
+
+
+class SavedAnalysisListResponse(BaseModel):
+    reports: list[SavedAnalysisSummary] = Field(default_factory=list)
