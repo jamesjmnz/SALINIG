@@ -148,7 +148,7 @@ export default function DashboardView({ analysis, latestUpdatedAt, status }: Das
             <div className="stat-label">{s.label}</div>
             <div className={`stat-val ${s.cls}`}><LiveCounter target={s.val} suffix={s.suffix} /></div>
             <div className="stat-delta">
-              <span className={s.up ? 'delta-up' : 'delta-dn'}>{s.up ? '↑' : '↑'} {s.delta}</span>
+              <span className={s.up ? 'delta-up' : 'delta-dn'}>{s.up ? '↑' : '↓'} {s.delta}</span>
             </div>
           </div>
         ))}
