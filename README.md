@@ -310,6 +310,12 @@ cd backend
 ../backend/venv/bin/uvicorn app.main:app --reload
 ```
 
+If you want one shortcut that starts Qdrant and then launches the backend:
+
+```bash
+./run_backend_stack.sh
+```
+
 The API will be available at:
 
 ```text
