@@ -104,8 +104,6 @@ export const VIEW_TITLES: Record<string, string> = {
   signals:   'Live Signals',
   verify:    'Verification Queue',
   sentiment: 'Sentiment Analysis',
-  reports:   'Intelligence Reports',
-  sources:   'Data Sources',
-  agents:    'Agent Monitor',
+  reports:   'Saved Reports',
   settings:  'Settings',
 };
