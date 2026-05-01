@@ -5,6 +5,11 @@ from fastapi.responses import StreamingResponse
 
 from app.core.rate_limit import enforce_rate_limit
 from app.core.security import verify_api_key
+from app.domain.services.analysis_feedback import (
+    create_feedback,
+    export_feedback,
+    list_feedback,
+)
 from app.domain.services.analysis_cache import (
     get_saved_report,
     latest_successful_analysis,
@@ -15,6 +20,10 @@ from app.domain.services.analysis_service import AnalysisService
 from app.schemas.analysis_schema import (
     AnalysisOptions,
     AnalysisResponse,
+    AnalystFeedbackCreateRequest,
+    AnalystFeedbackExportResponse,
+    AnalystFeedbackListResponse,
+    AnalystFeedbackRecord,
     AnalyzeRequest,
     LatestAnalysisResponse,
     SavedAnalysisListResponse,
@@ -87,3 +96,18 @@ def saved_report_detail(report_id: str) -> SavedAnalysisRecord:
 @router.get("/options", response_model=AnalysisOptions)
 def options() -> AnalysisOptions:
     return AnalysisOptions()
+
+
+@router.post("/feedback", response_model=AnalystFeedbackRecord, response_model_exclude_none=True)
+def submit_feedback(request: AnalystFeedbackCreateRequest) -> AnalystFeedbackRecord:
+    return create_feedback(request)
+
+
+@router.get("/feedback", response_model=AnalystFeedbackListResponse, response_model_exclude_none=True)
+def feedback_list() -> AnalystFeedbackListResponse:
+    return list_feedback()
+
+
+@router.get("/feedback/export", response_model=AnalystFeedbackExportResponse, response_model_exclude_none=True)
+def feedback_export() -> AnalystFeedbackExportResponse:
+    return export_feedback()

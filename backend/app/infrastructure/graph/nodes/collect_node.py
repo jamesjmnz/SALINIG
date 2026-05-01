@@ -2,8 +2,10 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.core.config import settings
-from app.infrastructure.search.tavily_search import search
 from app.infrastructure.graph.trace import append_trace
+from app.infrastructure.graph.source_utils import clean_text, source_url
+from app.infrastructure.rerank.hf_reranker import rerank_sources
+from app.infrastructure.search.tavily_search import search
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +24,11 @@ def _normalise_results(data):
 
 
 def _get_url(item):
-    if isinstance(item, dict):
-        return item.get("url") or item.get("link") or item.get("source")
-    return None
+    return source_url(item)
 
 
 def _clean_text(value):
-    if not value:
-        return ""
-    return " ".join(str(value).split())
+    return clean_text(value)
 
 
 def _truncate(value, max_chars):
@@ -119,12 +117,30 @@ def collect_node(state):
 
     all_items = _dedupe_sources(list(state.get("collected_data") or []) + new_items)
     logger.info("collect done — new_sources=%d total_sources=%d errors=%d", len(new_items), len(all_items), len(errors))
-    text = _truncate("\n\n".join([_format_source(item, source_char_limit) for item in all_items]), evidence_char_limit)
-    source_urls = [url for url in [_get_url(item) for item in all_items] if url]
+    query_context = " ".join(
+        [
+            state.get("place") or "",
+            " ".join(state.get("prioritize_themes") or []),
+            " ".join(state.get("focus_terms") or []),
+            " ".join(state.get("knowledge_gaps") or []),
+        ]
+    )
+    ranked_sources = rerank_sources(
+        query_context,
+        all_items,
+        top_k=int(runtime_options.get("rerank_top_k", settings.RAG_RERANK_TOP_K)),
+    )
+    ranked_items = list(ranked_sources)
+    text = _truncate(
+        "\n\n".join([_format_source(item, source_char_limit) for item in ranked_items]),
+        evidence_char_limit,
+    )
+    source_urls = [url for url in [_get_url(item) for item in ranked_items] if url]
 
     return {
         **working_state,
-        "collected_data": all_items,
+        "collected_data": ranked_items,
+        "ranked_sources": ranked_items,
         "evidence_text": text,
         "source_urls": source_urls,
         "cycle_trace": append_trace(
@@ -133,8 +149,9 @@ def collect_node(state):
             "searched",
             queries=queries,
             new_sources=len(new_items),
-            total_sources=len(all_items),
+            total_sources=len(ranked_items),
             evidence_chars=len(text),
+            reranked_sources=len(ranked_items),
             errors=errors or None,
         ),
     }

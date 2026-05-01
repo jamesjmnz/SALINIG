@@ -6,10 +6,12 @@ from typing import Any
 from app.core.config import settings
 from app.schemas.analysis_schema import (
     AnalysisDiagnostics,
+    ClaimVerificationSummary,
     AnalysisMode,
     AnalysisResponse,
     AnalyzeRequest,
     CitationValidationResult,
+    EvidenceSufficiencyResult,
     EvidenceSource,
     MemoryItem,
     QualityResult,
@@ -30,6 +32,7 @@ def _runtime_options(analysis_mode: AnalysisMode) -> dict[str, Any]:
             "source_char_limit": 1800,
             "enable_roberta": False,
             "sync_learning": False,
+            "rerank_top_k": min(settings.RAG_RERANK_TOP_K, 6),
         }
 
     return {
@@ -43,6 +46,7 @@ def _runtime_options(analysis_mode: AnalysisMode) -> dict[str, Any]:
         "source_char_limit": settings.RAG_SOURCE_CHAR_LIMIT,
         "enable_roberta": settings.RAG_ENABLE_ROBERTA,
         "sync_learning": settings.RAG_SYNC_LEARNING,
+        "rerank_top_k": settings.RAG_RERANK_TOP_K,
     }
 
 
@@ -117,14 +121,17 @@ class AnalysisService:
         labels = {
             "query_gen": "Generating search queries",
             "research": "Collecting sources and memory",
+            "evidence_gate": "Checking evidence sufficiency",
             "analysis": "Assessing sentiment and credibility",
             "insight": "Preparing report, source signals, and actions",
+            "claim_verification": "Mapping claims to evidence",
             "citation_validation": "Validating cited sources",
             "evaluate": "Scoring quality gate",
             "learn": "Distilling learning note",
             "save": "Saving learning note",
             "complete": "Finalizing accepted report",
             "finalize": "Returning best available report",
+            "insufficient_evidence": "Returning insufficient-evidence result",
         }
         sentiment_report = state.get("sentiment_report") or {}
         metrics = sentiment_report.get("metrics") or {}
@@ -152,10 +159,12 @@ class AnalysisService:
             "runtime_options": runtime_options,
             "search_queries": [],
             "collected_data": [],
+            "ranked_sources": [],
             "evidence_text": "",
             "source_urls": [],
             "memory_context": "",
             "retrieved_memories": [],
+            "evidence_sufficiency": {},
             "sentiment": "",
             "sentiment_label": "",
             "sentiment_scores": {},
@@ -186,6 +195,8 @@ class AnalysisService:
             "memory_duplicate": False,
             "memory_error": None,
             "memory_save_error": None,
+            "analysis_status": "completed",
+            "claim_verification": {},
             "citation_validation": {},
             "cycle_trace": [],
         }
@@ -211,6 +222,12 @@ class AnalysisService:
                 learning_citations=result.get("learning_citations", []),
                 memory_error=result.get("memory_error"),
                 memory_save_error=result.get("memory_save_error"),
+                evidence_sufficiency=EvidenceSufficiencyResult.model_validate(
+                    result.get("evidence_sufficiency") or {}
+                ),
+                claim_verification=ClaimVerificationSummary.model_validate(
+                    result.get("claim_verification") or {}
+                ),
                 citation_validation=CitationValidationResult.model_validate(
                     result.get("citation_validation") or {}
                 ),
@@ -223,6 +240,7 @@ class AnalysisService:
             focus_terms=result.get("focus_terms", []),
             place=result.get("place"),
             analysis_mode=result.get("analysis_mode", "fast_draft"),
+            analysis_status=result.get("analysis_status", "completed"),
             final_report=result.get("final_report", ""),
             sentiment_report=SentimentReport.model_validate(result.get("sentiment_report"))
             if result.get("sentiment_report")

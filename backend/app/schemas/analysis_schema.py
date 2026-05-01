@@ -88,6 +88,7 @@ class QualityResult(BaseModel):
 
 
 class SentimentSourceSignal(BaseModel):
+    source_index: int = Field(0, ge=0)
     source: str = ""
     title: str = ""
     url: str | None = None
@@ -139,6 +140,63 @@ class CitationValidationResult(BaseModel):
     unsupported_source_titles: list[str] = Field(default_factory=list)
 
 
+class RankedEvidenceSource(EvidenceSource):
+    source_index: int = Field(0, ge=0)
+    domain: str = ""
+    official: bool = False
+    rerank_score: float | None = None
+
+
+class EvidenceSufficiencyResult(BaseModel):
+    checked: bool = False
+    passed: bool = True
+    source_count: int = Field(0, ge=0)
+    unique_domain_count: int = Field(0, ge=0)
+    official_source_count: int = Field(0, ge=0)
+    reasons: list[str] = Field(default_factory=list)
+    ranked_sources: list[RankedEvidenceSource] = Field(default_factory=list)
+
+
+class ClaimEvidenceLink(BaseModel):
+    source_index: int = Field(ge=1)
+    title: str = ""
+    url: str | None = None
+    domain: str = ""
+    support_label: Literal["supported", "mixed", "contradicted", "unclear"] = "unclear"
+    support_score: float = Field(0.0, ge=0.0, le=1.0)
+    rationale: str = ""
+
+
+class ReportClaim(BaseModel):
+    claim_id: str
+    text: str
+    claim_type: Literal["overview", "signal", "insight", "finding"] = "finding"
+    source_indexes: list[int] = Field(default_factory=list)
+    support_status: Literal["supported", "mixed", "contradicted", "unsupported"] = "unsupported"
+    evidence_links: list[ClaimEvidenceLink] = Field(default_factory=list)
+
+
+class ContradictionAlert(BaseModel):
+    claim_id: str = ""
+    claim_text: str = ""
+    source_index: int = Field(0, ge=0)
+    source_title: str = ""
+    url: str | None = None
+    label: Literal["supported", "mixed", "contradicted", "unclear"] = "unclear"
+    confidence: float = Field(0.0, ge=0.0, le=1.0)
+    rationale: str = ""
+
+
+class ClaimVerificationSummary(BaseModel):
+    checked: bool = False
+    verified_claim_count: int = Field(0, ge=0)
+    contradicted_claim_count: int = Field(0, ge=0)
+    unsupported_claim_count: int = Field(0, ge=0)
+    model: str = ""
+    claims: list[ReportClaim] = Field(default_factory=list)
+    contradictions: list[ContradictionAlert] = Field(default_factory=list)
+
+
 class AnalysisDiagnostics(BaseModel):
     search_queries: list[str] = Field(default_factory=list)
     collected_sources: list[EvidenceSource] = Field(default_factory=list)
@@ -148,6 +206,8 @@ class AnalysisDiagnostics(BaseModel):
     learning_citations: list[str] = Field(default_factory=list)
     memory_error: str | None = None
     memory_save_error: str | None = None
+    evidence_sufficiency: EvidenceSufficiencyResult = Field(default_factory=EvidenceSufficiencyResult)
+    claim_verification: ClaimVerificationSummary = Field(default_factory=ClaimVerificationSummary)
     citation_validation: CitationValidationResult = Field(default_factory=CitationValidationResult)
 
 
@@ -160,6 +220,7 @@ class AnalysisResponse(BaseModel):
     focus_terms: list[str] = Field(default_factory=list)
     place: str
     analysis_mode: AnalysisMode = "fast_draft"
+    analysis_status: Literal["completed", "insufficient_evidence"] = "completed"
     final_report: str = ""
     sentiment_report: SentimentReport | None = None
     iteration: int = 0
@@ -207,3 +268,62 @@ class SavedAnalysisRecord(BaseModel):
 
 class SavedAnalysisListResponse(BaseModel):
     reports: list[SavedAnalysisSummary] = Field(default_factory=list)
+
+
+FeedbackText = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=1500),
+]
+
+
+class AnalystFeedbackCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    report_id: str | None = Field(default=None, min_length=6, max_length=64)
+    score: int = Field(ge=1, le=5)
+    useful: bool = True
+    accurate: bool = True
+    notes: FeedbackText | None = None
+    flagged_claim_ids: list[str] = Field(default_factory=list, max_length=10)
+    tags: list[str] = Field(default_factory=list, max_length=10)
+
+    @field_validator("flagged_claim_ids", mode="before")
+    @classmethod
+    def normalize_claim_ids(cls, value: list[str] | None) -> list[str]:
+        return dedupe_focus_terms(value)
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def normalize_tags(cls, value: list[str] | None) -> list[str]:
+        return dedupe_focus_terms(value)
+
+
+class AnalystFeedbackRecord(BaseModel):
+    feedback_id: str
+    created_at: str
+    report_id: str | None = None
+    score: int = Field(ge=1, le=5)
+    useful: bool = True
+    accurate: bool = True
+    notes: str | None = None
+    flagged_claim_ids: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class AnalystFeedbackListResponse(BaseModel):
+    feedback: list[AnalystFeedbackRecord] = Field(default_factory=list)
+
+
+class FineTuningReadinessSummary(BaseModel):
+    total_feedback: int = Field(0, ge=0)
+    useful_positive_count: int = Field(0, ge=0)
+    inaccurate_count: int = Field(0, ge=0)
+    average_score: float = Field(0.0, ge=0.0, le=5.0)
+    ready_for_fine_tuning: bool = False
+    recommendation: str = ""
+    most_flagged_claim_ids: list[str] = Field(default_factory=list)
+
+
+class AnalystFeedbackExportResponse(BaseModel):
+    summary: FineTuningReadinessSummary
+    feedback: list[AnalystFeedbackRecord] = Field(default_factory=list)

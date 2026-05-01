@@ -11,10 +11,12 @@ class SalinigState(TypedDict):
     search_queries: list[str]
 
     collected_data: list
+    ranked_sources: list[dict[str, Any]]
     evidence_text: str
     source_urls: list[str]
     memory_context: str
     retrieved_memories: list[dict[str, Any]]
+    evidence_sufficiency: dict[str, Any]
 
     sentiment: str
     sentiment_label: str
@@ -48,5 +50,7 @@ class SalinigState(TypedDict):
     memory_duplicate: bool
     memory_error: str | None
     memory_save_error: str | None
+    analysis_status: str
+    claim_verification: dict[str, Any]
     citation_validation: dict[str, Any]
     cycle_trace: list[dict[str, Any]]

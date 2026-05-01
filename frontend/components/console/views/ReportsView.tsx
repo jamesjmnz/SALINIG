@@ -207,6 +207,9 @@ function SavedReportDetail({ report, summary }: SavedReportDetailProps) {
   const latestScore = Math.round((analysis.quality?.score ?? analysis.quality_score ?? 0) * 100);
   const sentimentReport = analysis.sentiment_report;
   const metrics = sentimentReport?.metrics;
+  const diagnostics = analysis.diagnostics;
+  const evidenceSufficiency = diagnostics?.evidence_sufficiency;
+  const claimVerification = diagnostics?.claim_verification;
   const breakdown = Object.entries(analysis.quality?.breakdown ?? analysis.quality_breakdown ?? {});
   const knowledgeGaps = analysis.quality?.knowledge_gaps?.length
     ? analysis.quality.knowledge_gaps
@@ -251,6 +254,9 @@ function SavedReportDetail({ report, summary }: SavedReportDetailProps) {
                 <p className="report-story-note">
                   {summary.title} was saved to your archive and can be reopened here any time.
                 </p>
+                <p className="report-story-note" style={{ marginTop: 10 }}>
+                  Run status: <strong>{analysis.analysis_status.replace('_', ' ')}</strong>
+                </p>
               </div>
             </div>
           </div>
@@ -283,6 +289,10 @@ function SavedReportDetail({ report, summary }: SavedReportDetailProps) {
               <div className="report-quickfact">
                 <span>Run mode</span>
                 <strong>{analysis.analysis_mode.replace('_', ' ')}</strong>
+              </div>
+              <div className="report-quickfact">
+                <span>Claims checked</span>
+                <strong>{claimVerification?.claims.length ?? 0}</strong>
               </div>
             </div>
           </aside>
@@ -349,6 +359,7 @@ function SavedReportDetail({ report, summary }: SavedReportDetailProps) {
                       </span>
                     </div>
                     <div className="evidence-card-meta">
+                      <span className="evidence-chip">S{signal.source_index}</span>
                       <span className={`evidence-chip ${signal.sentiment.toLowerCase()}`}>{signal.sentiment}</span>
                       <span className="evidence-chip">{signal.credibility}</span>
                       <span className="evidence-chip">{signal.credibility_score}/100 credibility</span>
@@ -363,6 +374,76 @@ function SavedReportDetail({ report, summary }: SavedReportDetailProps) {
                     </div>
                   </article>
                 ))}
+              </div>
+            </section>
+          ) : null}
+
+          {claimVerification?.checked ? (
+            <section className="panel report-module">
+              <div className="panel-head">
+                <span className="panel-title">Claim Grounding Map</span>
+                <span className="panel-action">{claimVerification.model}</span>
+              </div>
+              <div className="evidence-ledger">
+                {claimVerification.claims.map(claim => (
+                  <article className="evidence-card" key={claim.claim_id}>
+                    <div className="evidence-card-head">
+                      <div>
+                        <h3>{claim.claim_type}</h3>
+                        <p>{claim.text}</p>
+                      </div>
+                      <span className={`report-status-pill ${claim.support_status === 'supported' ? 'verified' : claim.support_status === 'contradicted' ? 'flagged' : 'pending'}`}>
+                        {claim.support_status}
+                      </span>
+                    </div>
+                    {claim.evidence_links.length ? (
+                      <div style={{ display: 'grid', gap: 10 }}>
+                        {claim.evidence_links.map(link => (
+                          <div key={`${claim.claim_id}-${link.source_index}`} style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
+                              <strong>{link.title}</strong>
+                              <span>{link.support_label} · {Math.round(link.support_score * 100)}</span>
+                            </div>
+                            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>{link.rationale}</div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="report-story-note">No mapped evidence links were preserved for this claim.</p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {evidenceSufficiency?.checked ? (
+            <section className="panel report-module">
+              <div className="panel-head">
+                <span className="panel-title">Evidence Gate Snapshot</span>
+                <span className="panel-action">{evidenceSufficiency.passed ? 'passed' : 'hold'}</span>
+              </div>
+              <div className="report-risk-grid">
+                <article className="report-risk-card">
+                  <span className="report-section-label">Coverage</span>
+                  <div className="report-note-list">
+                    <div className="report-note-item">{evidenceSufficiency.source_count} ranked sources</div>
+                    <div className="report-note-item">{evidenceSufficiency.unique_domain_count} unique domains</div>
+                    <div className="report-note-item">{evidenceSufficiency.official_source_count} official sources</div>
+                  </div>
+                </article>
+                <article className="report-risk-card">
+                  <span className="report-section-label">Gate reasons</span>
+                  {evidenceSufficiency.reasons.length ? (
+                    <div className="report-note-list">
+                      {evidenceSufficiency.reasons.map(reason => (
+                        <div className="report-note-item" key={reason}>{reason}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="report-story-note">This run had enough evidence to continue into synthesis.</p>
+                  )}
+                </article>
               </div>
             </section>
           ) : null}
@@ -455,6 +536,22 @@ function SavedReportDetail({ report, summary }: SavedReportDetailProps) {
             </div>
           </section>
 
+          {claimVerification?.contradictions?.length ? (
+            <section className="panel report-side-panel">
+              <div className="panel-head">
+                <span className="panel-title">Contradictions</span>
+                <span className="panel-action">review queue</span>
+              </div>
+              <div className="report-note-list">
+                {claimVerification.contradictions.map(item => (
+                  <div className="report-note-item" key={`${item.claim_id}-${item.source_index}`}>
+                    {item.claim_text} ({item.source_title})
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <section className="panel report-side-panel">
             <div className="panel-head">
               <span className="panel-title">Run Facts</span>
@@ -476,6 +573,10 @@ function SavedReportDetail({ report, summary }: SavedReportDetailProps) {
               <div className="report-fact-row">
                 <span>Misinformation risk</span>
                 <strong>{metrics?.misinfo_risk_pct ?? 0}%</strong>
+              </div>
+              <div className="report-fact-row">
+                <span>Evidence gate</span>
+                <strong>{evidenceSufficiency?.checked ? (evidenceSufficiency.passed ? 'passed' : 'hold') : 'n/a'}</strong>
               </div>
             </div>
           </section>

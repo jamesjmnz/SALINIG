@@ -31,6 +31,17 @@ class Settings(BaseSettings):
     RAG_MAX_SEARCH_QUERIES: int = 10
     RAG_SEARCH_MAX_WORKERS: int = 4
     RAG_SIGNAL_MAX_WORKERS: int = 4
+    RAG_ENABLE_RERANKING: bool = True
+    RAG_RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
+    RAG_RERANK_TOP_K: int = 8
+    RAG_ENABLE_EVIDENCE_SUFFICIENCY_GATE: bool = True
+    RAG_MIN_SOURCES_REQUIRED: int = 2
+    RAG_MIN_UNIQUE_DOMAINS_REQUIRED: int = 2
+    RAG_MIN_OFFICIAL_SOURCES_REQUIRED: int = 0
+    RAG_ENABLE_NLI_VERIFICATION: bool = True
+    RAG_NLI_MODEL: str = "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
+    RAG_MAX_CLAIMS_TO_VERIFY: int = 8
+    RAG_MAX_SOURCES_PER_CLAIM: int = 3
 
     OPENAI_EMBEDDING_DIMENSIONS: int = 1536
     EXTERNAL_REQUEST_TIMEOUT_SECONDS: float = 30.0
@@ -42,6 +53,9 @@ class Settings(BaseSettings):
     SALINIG_CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
     SALINIG_SAVED_REPORTS_PATH: str = str(
         Path(__file__).resolve().parents[2] / ".salinig" / "saved_reports.json"
+    )
+    SALINIG_ANALYST_FEEDBACK_PATH: str = str(
+        Path(__file__).resolve().parents[2] / ".salinig" / "analyst_feedback.json"
     )
     SALINIG_SAVED_REPORTS_LIMIT: int = 50
 

@@ -1,6 +1,5 @@
 import { icons } from './icons';
 import type { AnalysisProgressEvent, AnalysisResponse } from '@/lib/analysisApi';
-import { SIGNALS } from '@/lib/consoleData';
 
 interface NavItem {
   id: string;
@@ -24,15 +23,19 @@ function signalBadgeCount(analysis: AnalysisResponse | null, progress: AnalysisP
     return analysis.sentiment_report.metrics.signal_count;
   }
   if (analysis?.sentiment_report?.source_signals?.length) return analysis.sentiment_report.source_signals.length;
-  return SIGNALS.length;
+  return 0;
 }
 
 function verificationBadgeCount(analysis: AnalysisResponse | null) {
+  const verification = analysis?.diagnostics?.claim_verification;
+  if (verification?.checked) {
+    return (verification.contradicted_claim_count ?? 0) + (verification.unsupported_claim_count ?? 0);
+  }
   const sourceSignals = analysis?.sentiment_report?.source_signals;
   if (sourceSignals?.length) {
     return sourceSignals.filter(signal => signal.verification !== 'verified').length;
   }
-  return 2;
+  return 0;
 }
 
 export default function Sidebar({ view, setView, analysis, progress }: SidebarProps) {
@@ -67,7 +70,7 @@ export default function Sidebar({ view, setView, analysis, progress }: SidebarPr
               <span className="sb-item-label">{item.label}</span>
               <span className="sb-item-desc">{item.description}</span>
             </div>
-            {item.badge && <span className={`sb-badge ${item.badgeClass || ''}`}>{item.badge}</span>}
+            {item.badge !== null && Number(item.badge) > 0 ? <span className={`sb-badge ${item.badgeClass || ''}`}>{item.badge}</span> : null}
           </button>
         ))}
       </div>
