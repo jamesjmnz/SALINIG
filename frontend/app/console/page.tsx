@@ -9,8 +9,6 @@ import SignalsView from '@/components/console/views/SignalsView';
 import VerifyView from '@/components/console/views/VerifyView';
 import SentimentView from '@/components/console/views/SentimentView';
 import ReportsView from '@/components/console/views/ReportsView';
-import SourcesView from '@/components/console/views/SourcesView';
-import AgentsView from '@/components/console/views/AgentsView';
 import SettingsView from '@/components/console/views/SettingsView';
 import { TWEAK_DEFAULTS, TweakState } from '@/lib/consoleData';
 import {
@@ -21,6 +19,7 @@ import {
   AnalyzePayload,
   fetchAnalysisOptions,
   fetchLatestAnalysis,
+  saveAnalysisReport,
   streamAnalysis,
 } from '@/lib/analysisApi';
 
@@ -34,6 +33,9 @@ export default function ConsolePage() {
   const [analysisStatus, setAnalysisStatus] = useState<AnalysisStatus>('loading-cache');
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgressEvent | null>(null);
+  const [savedReportId, setSavedReportId] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'error'>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const setTweak = (k: string, v: string) => setTweakState(prev => ({ ...prev, [k]: v }));
 
@@ -69,6 +71,7 @@ export default function ConsolePage() {
         if (latest.cached && latest.analysis) {
           setAnalysis(latest.analysis);
           setLatestUpdatedAt(latest.updated_at ?? null);
+          setSavedReportId(latest.report_id ?? null);
         }
         setAnalysisStatus('idle');
       } catch (error) {
@@ -87,12 +90,14 @@ export default function ConsolePage() {
     setAnalysisStatus('running');
     setAnalysisError(null);
     setAnalysisProgress({ type: 'status', node: 'queued', label: 'Preparing analysis' });
+    setSavedReportId(null);
+    setSaveStatus('idle');
+    setSaveError(null);
     try {
       const result = await streamAnalysis(payload, event => {
         setAnalysisProgress(event);
       });
       setAnalysis(result);
-      setLatestUpdatedAt(new Date().toISOString());
       setAnalysisStatus('idle');
     } catch (error) {
       setAnalysisStatus('error');
@@ -101,10 +106,36 @@ export default function ConsolePage() {
     }
   };
 
+  const openSavedReport = (reportId: string) => {
+    setSavedReportId(reportId);
+    setView('reports');
+  };
+
+  const handleSaveReport = async () => {
+    if (!analysis) return;
+    if (savedReportId) {
+      openSavedReport(savedReportId);
+      return;
+    }
+
+    setSaveStatus('saving');
+    setSaveError(null);
+    try {
+      const saved = await saveAnalysisReport(analysis);
+      setSavedReportId(saved.report_id);
+      setLatestUpdatedAt(saved.saved_at);
+      setSaveStatus('idle');
+      openSavedReport(saved.report_id);
+    } catch (error) {
+      setSaveStatus('error');
+      setSaveError(error instanceof Error ? error.message : 'Unable to save report.');
+    }
+  };
+
   const views: Record<string, React.ReactNode> = {
     dashboard: <DashboardView analysis={analysis} latestUpdatedAt={latestUpdatedAt} status={analysisStatus} />,
     signals:   <SignalsView analysis={analysis} />,
-    verify:    <VerifyView />,
+    verify:    <VerifyView analysis={analysis} />,
     sentiment: (
       <SentimentView
         analysis={analysis}
@@ -114,17 +145,26 @@ export default function ConsolePage() {
         progress={analysisProgress}
         error={analysisError}
         onAnalyze={handleAnalyze}
+        onSaveReport={handleSaveReport}
+        saveStatus={saveStatus}
+        saveError={saveError}
+        savedReportId={savedReportId}
       />
     ),
-    reports:   <ReportsView analysis={analysis} latestUpdatedAt={latestUpdatedAt} />,
-    sources:   <SourcesView />,
-    agents:    <AgentsView />,
+    reports:   (
+      <ReportsView
+        analysis={analysis}
+        latestUpdatedAt={latestUpdatedAt}
+        focusedReportId={savedReportId}
+        onFocusReport={setSavedReportId}
+      />
+    ),
     settings:  <SettingsView />,
   };
 
   return (
     <div className="app">
-      <Sidebar view={view} setView={setView} />
+      <Sidebar view={view} setView={setView} analysis={analysis} progress={analysisProgress} />
       <div className="main">
         <Topbar view={view} onNewReport={() => setView('sentiment')} />
         <div className="content">{views[view]}</div>

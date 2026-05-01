@@ -19,19 +19,24 @@ interface SentimentViewProps {
   progress: AnalysisProgressEvent | null;
   error: string | null;
   onAnalyze: (payload: AnalyzePayload) => Promise<void>;
+  onSaveReport: () => Promise<void>;
+  saveStatus: 'idle' | 'saving' | 'error';
+  saveError: string | null;
+  savedReportId: string | null;
 }
 
 function formatUpdatedAt(value: string | null) {
-  if (!value) return 'No cached report';
+  if (!value) return 'No saved report';
   try {
-    return new Intl.DateTimeFormat('en', {
+    const formatted = new Intl.DateTimeFormat('en', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
     }).format(new Date(value));
+    return `Saved ${formatted}`;
   } catch {
-    return 'Cached report';
+    return 'Saved report';
   }
 }
 
@@ -87,6 +92,10 @@ function SentimentViewContent({
   progress,
   error,
   onAnalyze,
+  onSaveReport,
+  saveStatus,
+  saveError,
+  savedReportId,
 }: SentimentViewProps) {
   const fallbackCategories = [
     'Governance & Public Services',
@@ -145,6 +154,17 @@ function SentimentViewContent({
   };
 
   const running = status === 'running';
+  const saveDisabled = !analysis || running || saveStatus === 'saving';
+  const saveLabel = savedReportId
+    ? 'Open Saved Report'
+    : saveStatus === 'saving'
+    ? 'Saving...'
+    : 'Save Report';
+  const saveHint = savedReportId
+    ? 'This run is already in your saved archive.'
+    : analysis && !analysis.quality.passed
+    ? 'This run can still be saved. It will be marked as review in the archive.'
+    : saveError;
   const progressMeta = [
     typeof progress?.iteration === 'number' && typeof progress?.max_iterations === 'number'
       ? `cycle ${progress.iteration}/${progress.max_iterations}`
@@ -214,12 +234,27 @@ function SentimentViewContent({
         </div>
         <div className="analysis-run-footer">
           <div className="analysis-status-text">
-            {error || (running ? (progress?.label ?? 'Running cyclic RAG analysis') : analysis ? `${analysis.place} · ${analysis.monitoring_window}` : 'Cached report will appear here')}
+            {error || (running ? (progress?.label ?? 'Running cyclic RAG analysis') : analysis ? `${analysis.place} · ${analysis.monitoring_window}` : 'Saved report detail will appear here after a successful run')}
           </div>
-          <button className="topbar-btn primary" onClick={submit} disabled={running || selectedCategories.length === 0}>
-            {running ? 'Analyzing...' : 'Analyze / Refresh'}
-          </button>
+          <div className="analysis-run-actions">
+            {analysis ? (
+              <button
+                className="topbar-btn"
+                onClick={() => {
+                  void onSaveReport();
+                }}
+                disabled={saveDisabled}
+                title={saveHint ?? undefined}
+              >
+                {saveLabel}
+              </button>
+            ) : null}
+            <button className="topbar-btn primary" onClick={submit} disabled={running || selectedCategories.length === 0}>
+              {running ? 'Analyzing...' : 'Analyze / Refresh'}
+            </button>
+          </div>
         </div>
+        {saveHint ? <div className="analysis-save-note">{saveHint}</div> : null}
         {running && (
           <div className="analysis-progress">
             <div className="analysis-progress-track">
