@@ -80,7 +80,32 @@ export interface AnalysisOptions {
 export interface LatestAnalysisResponse {
   cached: boolean;
   updated_at?: string | null;
+  report_id?: string | null;
   analysis?: AnalysisResponse | null;
+}
+
+export interface SavedAnalysisSummary {
+  report_id: string;
+  saved_at: string;
+  title: string;
+  place: string;
+  monitoring_window: MonitoringWindow;
+  analysis_mode: AnalysisMode;
+  overall_label: string;
+  quality_score: number;
+  quality_passed: boolean;
+  signal_count: number;
+  prioritize_themes: string[];
+}
+
+export interface SavedAnalysisRecord {
+  report_id: string;
+  saved_at: string;
+  analysis: AnalysisResponse;
+}
+
+export interface SavedAnalysisListResponse {
+  reports: SavedAnalysisSummary[];
 }
 
 export interface AnalyzePayload {
@@ -121,7 +146,15 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(detail || `Request failed with ${response.status}`);
+    if (detail) {
+      let message = detail;
+      try {
+        const parsed = JSON.parse(detail) as { detail?: string };
+        if (parsed.detail) message = parsed.detail;
+      } catch {}
+      throw new Error(message);
+    }
+    throw new Error(`Request failed with ${response.status}`);
   }
   return response.json() as Promise<T>;
 }
@@ -132,6 +165,21 @@ export function fetchAnalysisOptions() {
 
 export function fetchLatestAnalysis() {
   return apiJson<LatestAnalysisResponse>('/analysis/latest');
+}
+
+export function fetchSavedReports() {
+  return apiJson<SavedAnalysisListResponse>('/analysis/saved');
+}
+
+export function fetchSavedReport(reportId: string) {
+  return apiJson<SavedAnalysisRecord>(`/analysis/saved/${reportId}`);
+}
+
+export function saveAnalysisReport(analysis: AnalysisResponse) {
+  return apiJson<SavedAnalysisRecord>('/analysis/saved', {
+    method: 'POST',
+    body: JSON.stringify(analysis),
+  });
 }
 
 export function runAnalysis(payload: AnalyzePayload) {
