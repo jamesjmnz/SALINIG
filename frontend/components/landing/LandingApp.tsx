@@ -1,624 +1,555 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion, useReducedMotion, type Variants } from 'framer-motion';
-import {
-  TWEAK_DEFAULTS, MARQUEE_ITEMS, FEAT_TABS, WHY_CARDS, STEPS, LOG_LINES, FAQ_DATA,
-  type LogLine, type WhyCard, type Step,
-} from '@/lib/landingData';
+import { useState } from 'react';
+import Link from 'next/link';
+import { SUP_FAQ_ITEMS } from '@/lib/landingData';
 
-const riseIn: Variants = {
-  hidden: { opacity: 0, y: 22, filter: 'blur(8px)' },
-  show: {
-    opacity: 1,
-    y: 0,
-    filter: 'blur(0px)',
-    transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+// ─── Figma Asset URLs (expire in ~7 days) ────────────────────
+const A = {
+  dashboard: '/dashboard-hero.png',
+  logos: {
+    springfield: 'https://www.figma.com/api/mcp/asset/e7d29749-ef0c-4ab5-b803-704b2b5599fc',
+    orbitc:      'https://www.figma.com/api/mcp/asset/769e517c-ce42-47f2-b783-202f2350df72',
+    cloud:       'https://www.figma.com/api/mcp/asset/63ef6acf-6f47-47cc-920a-da0367a088ab',
+    proline:     'https://www.figma.com/api/mcp/asset/8fff1717-fd3c-4716-8050-2883c2b8df37',
+    amsterdam:   'https://www.figma.com/api/mcp/asset/29197b29-ab91-4eb3-a47d-b5f43a6fe2c5',
+    luminous:    'https://www.figma.com/api/mcp/asset/62d318dd-7229-4353-b4ac-820243e06368',
+  },
+  feat: {
+    invite:    'https://www.figma.com/api/mcp/asset/409a0e6d-eead-4326-ad26-189f8beab02e',
+    edit:      'https://www.figma.com/api/mcp/asset/735035a3-e396-4ac7-b226-40c5f20d5c47',
+    feedback:  'https://www.figma.com/api/mcp/asset/488c513b-d405-4efb-8e0e-dfb2fc431746',
+    calendar:  'https://www.figma.com/api/mcp/asset/850efee6-b394-491b-8aa9-b19d38a09495',
+    analytics: 'https://www.figma.com/api/mcp/asset/39a0a62a-efe4-43dd-aa15-3366d8c1e80b',
+  },
+  bento: {
+    chart:       'https://www.figma.com/api/mcp/asset/bd82faca-2069-4f27-88c6-1049d87db0c7',
+    collabBg:    'https://www.figma.com/api/mcp/asset/7eee4b17-ced9-420b-8f4e-211d52abb0c5',
+    collabAv1:   'https://www.figma.com/api/mcp/asset/d3953d96-8dd2-42e5-a12a-f3e51070fc79',
+    collabAv2:   'https://www.figma.com/api/mcp/asset/4792b54b-2783-40d4-9832-0332d912b543',
+    collabAv3:   'https://www.figma.com/api/mcp/asset/33251df3-8275-4ab8-b0b9-72e2fcd85332',
+    collabAv4:   'https://www.figma.com/api/mcp/asset/1122cb80-1226-4073-a55d-1ff6da108d02',
+    shortcutsBg: 'https://www.figma.com/api/mcp/asset/25897210-f670-4782-9e89-fc673f688f3e',
+    intBg:       'https://www.figma.com/api/mcp/asset/78d5c80a-8caf-49d5-8717-a9072f4e6094',
+    intCloud:    'https://www.figma.com/api/mcp/asset/5ab926ba-1eeb-4be2-9a5d-ae855dae69c2',
+    intProline:  'https://www.figma.com/api/mcp/asset/a9054340-a795-4731-95cb-a4afc1dc8e31',
+    intLuminous: 'https://www.figma.com/api/mcp/asset/f61ae6f6-d1ea-4b0a-a3aa-3d79d7f33d16',
+    widgets:     'https://www.figma.com/api/mcp/asset/21a7dda4-9c12-4cd3-a787-f7903b3f1c64',
+  },
+  slider: {
+    calendar:    'https://www.figma.com/api/mcp/asset/42ea83ba-a4a7-4358-ab46-bd6b02421d4e',
+    analytics:   'https://www.figma.com/api/mcp/asset/d8666e35-b88d-4a1f-8780-b98f2bca5aa6',
+    integration: 'https://www.figma.com/api/mcp/asset/555d89df-6584-4943-8b69-b2b52a119dc6',
+    boards:      'https://www.figma.com/api/mcp/asset/24f77289-6f9f-48eb-b0cf-2912cec34be2',
   },
 };
 
-const staggerIn: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.12, delayChildren: 0.08 } },
-};
-
-// ─── Marquee ─────────────────────────────────────────────────
-function Marquee() {
-  const items = [...MARQUEE_ITEMS, ...MARQUEE_ITEMS];
+// ─── Arrow icon ───────────────────────────────────────────────
+function ArrowIcon({ color = 'currentColor', size = 16 }: { color?: string; size?: number }) {
   return (
-    <div className="marquee-wrap">
-      <div className="marquee-track">
-        {items.map((item, i) => (
-          <span className="marquee-item" key={i}>
-            <span className="marquee-sep">·</span>
-            {item}
-          </span>
-        ))}
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M3 8h10M9 4l4 4-4 4" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// ─── HERO ────────────────────────────────────────────────────
+
+function HeroSection() {
+  return (
+    <>
+      {/* Text area */}
+      <section className="sup-hero">
+        <div className="sup-hero-inner">
+          <div className="sup-hero-badge">
+            <span className="sup-hero-badge-new">NEW</span>
+            Announcing Cyclic RAG v2
+          </div>
+          <h1 className="sup-hero-title">
+            The most powerful<br />intelligence platform.
+          </h1>
+          <p className="sup-hero-sub">
+            Unlock the potential of your business with our next-level intelligence
+            platform. Transform your workflows and achieve new heights today.
+          </p>
+          <div className="sup-hero-actions">
+            <Link href="/console" className="sup-btn-primary">
+              Get started <ArrowIcon color="#fff" />
+            </Link>
+            <a href="#features" className="sup-btn-outline">
+              Learn more <ArrowIcon color="#020a0f" />
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Dashboard screenshot */}
+      <div className="sup-dash-wrap">
+        <div className="sup-dash-inner">
+          <div className="sup-dash-img-wrap">
+            <img src={A.dashboard} alt="Salinig dashboard" className="sup-dash-img" />
+          </div>
+
+          {/* Logos */}
+          <div className="sup-logos2-label-row">
+            <span className="sup-logos2-label">Trusted by the world leaders</span>
+          </div>
+          <div className="sup-logos2-row">
+            <img src={A.logos.springfield} alt="Springfield" className="sup-logo-svg" height={22} />
+            <img src={A.logos.orbitc}      alt="Orbitc"      className="sup-logo-svg" height={24} />
+            <img src={A.logos.cloud}       alt="Cloud"       className="sup-logo-svg" height={16} />
+            <img src={A.logos.proline}     alt="Proline"     className="sup-logo-svg" height={22} />
+            <img src={A.logos.amsterdam}   alt="Amsterdam"   className="sup-logo-svg" height={14} />
+            <img src={A.logos.luminous}    alt="Luminous"    className="sup-logo-svg" height={20} />
+          </div>
+        </div>
       </div>
+    </>
+  );
+}
+
+// ─── FEATURES BLOCKS ─────────────────────────────────────────
+
+const FEAT_CARDS = [
+  {
+    img:   A.feat.invite,
+    title: 'Invite members',
+    desc:  'Share, edit, and manage projects in real-time, ensuring everyone stays aligned and productive.',
+  },
+  {
+    img:   A.feat.edit,
+    title: 'Edit together',
+    desc:  'Work smarter with collaborative editing tools that keep everyone on the same page.',
+  },
+  {
+    img:   A.feat.feedback,
+    title: 'Instant feedback',
+    desc:  'Easily share thoughts, ask questions, and provide feedback directly within your files.',
+  },
+];
+
+function FeatPill({ color, icon, label }: { color: string; icon: string; label: string }) {
+  return (
+    <div className={`sup-feat-pill ${color}`}>
+      <span className="sup-feat-pill-icon">{icon}</span>
+      {label}
     </div>
   );
 }
 
-// ─── Console Dashboard ───────────────────────────────────────
-function ConsoleDashboard() {
+function FeatureBlocksSection() {
   return (
-    <div className="hc-wrap">
-      <div className="hc-chrome">
-        <div className="hc-chrome-dots">
-          <div className="wdot wd-r" /><div className="wdot wd-y" /><div className="wdot wd-g" />
+    <section id="features" className="sup-feat-blocks">
+      <div className="sup-feat-blocks-inner">
+
+        {/* Feature 1 — 3-column cards */}
+        <div className="sup-feat1">
+          <div className="sup-feat1-header">
+            <FeatPill color="blue" icon="◈" label="Seamless collaboration" />
+            <h2 className="sup-feat1-h2">Powering teamwork to simplify workflows</h2>
+            <p className="sup-feat1-p">
+              Say goodbye to version chaos and embrace a smoother workflow
+              designed to help your team achieve more, together.
+            </p>
+          </div>
+          <div className="sup-feat-cards">
+            {FEAT_CARDS.map((card) => (
+              <div key={card.title} className="sup-feat-card">
+                <div className="sup-feat-card-img">
+                  <img src={card.img} alt={card.title} />
+                </div>
+                <div className="sup-feat-card-info">
+                  <div className="sup-feat-card-title">{card.title}</div>
+                  <div className="sup-feat-card-desc">{card.desc}</div>
+                  <a href="#" className="sup-feat-card-link">
+                    Learn more <ArrowIcon color="#020a0f" size={14} />
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="hc-url">salinig.ai/console</div>
-        <div style={{ width: 52 }} />
-      </div>
-      <div className="hc-layout">
-        <div className="hc-sb">
-          <div className="hc-sb-logo">
-            <div className="hc-sb-mark" />
+
+        {/* Feature 2 — text left, image right */}
+        <div className="sup-feat-row">
+          <div className="sup-feat-row-text">
+            <div className="sup-feat-row-title">
+              <FeatPill color="orange" icon="◷" label="Meaningful calendar" />
+              <h2 className="sup-feat-row-h2">Dynamic planner that keeps you ahead</h2>
+              <p className="sup-feat-row-p">
+                Stay one step ahead with a calendar that grows with your schedule.
+                Adapt quickly to changes, manage priorities effectively, and achieve
+                your goals with ease.
+              </p>
+            </div>
             <div>
-              <div className="hc-sb-name">Salinig</div>
-              <div className="hc-sb-sub">intelligence</div>
+              <a href="#" className="sup-btn-ghost">Learn more <ArrowIcon color="#020a0f" /></a>
             </div>
           </div>
-          <div className="hc-sb-section">
-            <div className="hc-sb-label">Navigation</div>
-            {[
-              { label: 'Dashboard', active: true },
-              { label: 'Signals', badge: '3' },
-              { label: 'Reports' },
-              { label: 'Agents' },
-              { label: 'Sources' },
-              { label: 'Settings' },
-            ].map((item, i) => (
-              <div key={i} className={`hc-sb-item${item.active ? ' active' : ''}`}>
-                <div className="hc-sb-icon" />
-                {item.label}
-                {item.badge && <span className="hc-sb-badge">{item.badge}</span>}
-              </div>
-            ))}
+          <div className="sup-feat-row-img">
+            <img src={A.feat.calendar} alt="Calendar feature" />
           </div>
         </div>
-        <div className="hc-main">
-          <div className="hc-topbar">
-            <span className="hc-topbar-title">Dashboard</span>
-            <div className="hc-topbar-right">
-              <div className="hc-status">
-                <span className="pulse-dot" />
-                Live
-              </div>
-              <div className="hc-btn">Analyze Signal</div>
+
+        {/* Feature 3 — image left, text right */}
+        <div className="sup-feat-row reverse">
+          <div className="sup-feat-row-text">
+            <div className="sup-feat-row-title">
+              <FeatPill color="purple" icon="◎" label="Insightful analytics" />
+              <h2 className="sup-feat-row-h2">Analytics that power smarter decisions</h2>
+              <p className="sup-feat-row-p">
+                Our cutting-edge analytics deliver detailed trends, patterns, and
+                actionable intelligence to help you make informed decisions and
+                stay ahead of the competition.
+              </p>
+            </div>
+            <div>
+              <a href="#" className="sup-btn-ghost">Learn more <ArrowIcon color="#020a0f" /></a>
             </div>
           </div>
-          <div className="hc-content">
-            <div className="hc-stats">
-              {[
-                { label: 'CREDIBILITY', val: '87', green: true, delta: '+4 today' },
-                { label: 'SIGNALS', val: '2,847', delta: '+142 this week' },
-                { label: 'SOURCES', val: '18', delta: '+3 active' },
-                { label: 'RAG CYCLES', val: '12', delta: 'avg per run' },
-              ].map((s, i) => (
-                <div key={i} className="hc-stat">
-                  <div className="hc-stat-label">{s.label}</div>
-                  <div className={`hc-stat-val${s.green ? ' green' : ''}`}>{s.val}</div>
-                  <div className="hc-stat-delta">{s.delta}</div>
-                </div>
-              ))}
-            </div>
-            <div className="hc-panels">
-              <div className="hc-panel">
-                <div className="hc-panel-head">
-                  <span className="hc-panel-title">Signal Feed</span>
-                  <span className="hc-panel-action">View all →</span>
-                </div>
-                {[
-                  { text: 'Infrastructure bill claim: budget figures disputed by 3 independent sources', src: 'Reuters', time: '2m ago', score: '87', dot: 'high', sc: 'high' },
-                  { text: 'Market sentiment: tech sector showing mixed signals on AI regulation', src: 'Bloomberg', time: '8m ago', score: '72', dot: 'medium', sc: 'medium' },
-                  { text: 'Climate data: satellite imagery confirms deforestation claim', src: 'NASA DB', time: '14m ago', score: '94', dot: 'low', sc: 'high' },
-                  { text: 'Political statement: timeline inconsistency detected in press release', src: 'AP News', time: '23m ago', score: '58', dot: 'high', sc: 'low' },
-                ].map((sig, i) => (
-                  <div key={i} className="signal-item" style={{ cursor: 'default' }}>
-                    <div className={`signal-dot ${sig.dot}`} />
-                    <div className="signal-content">
-                      <div className="signal-text" style={{ fontSize: 12 }}>{sig.text}</div>
-                      <div className="signal-meta">
-                        <span className="signal-source">{sig.src}</span>
-                        <span className="signal-time">{sig.time}</span>
-                      </div>
-                    </div>
-                    <div className={`signal-score ${sig.sc}`}>{sig.score}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="hc-panel">
-                <div className="hc-panel-head">
-                  <span className="hc-panel-title">Active Agents</span>
-                </div>
-                {[
-                  { name: 'Query Gen', task: 'Generating Tavily queries', status: 'running' },
-                  { name: 'Collector', task: '5 results retrieved', status: 'running' },
-                  { name: 'Analyst', task: 'Credibility assessment', status: 'busy' },
-                  { name: 'Memory', task: 'Qdrant similarity search', status: 'idle' },
-                  { name: 'Evaluator', task: 'Scoring report: 87/100', status: 'idle' },
-                  { name: 'Learning', task: 'Awaiting pass threshold', status: 'idle' },
-                ].map((a, i) => (
-                  <div key={i} className="agent-item">
-                    <div className={`agent-status-dot ${a.status}`} />
-                    <div className="agent-name" style={{ fontSize: 11 }}>{a.name}</div>
-                    <div className="agent-task">{a.task}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <div className="sup-feat-row-img">
+            <img src={A.feat.analytics} alt="Analytics feature" />
           </div>
         </div>
+
       </div>
-    </div>
+    </section>
   );
 }
 
-// ─── Features ────────────────────────────────────────────────
-function FeatPanel({ lines }: { lines: LogLine[] }) {
-  const [visible, setVisible] = useState(0);
-  useEffect(() => {
-    const iv = setInterval(() => setVisible(v => v < lines.length ? v + 1 : v), 600);
-    return () => clearInterval(iv);
-  }, [lines]);
+// ─── BENTO GRID ───────────────────────────────────────────────
+
+function BentoGridSection() {
   return (
-    <div className="feat-panel">
-      <div className="feat-panel-bar">
-        <div className="wdot wd-r"></div><div className="wdot wd-y"></div><div className="wdot wd-g"></div>
-        <span style={{fontFamily:'var(--font-dm-mono), monospace', fontSize:11, color:'var(--muted)', marginLeft:6}}>agent-runtime</span>
+    <section className="sup-bento2">
+      <div className="sup-bento2-inner">
+
+        {/* Header */}
+        <div className="sup-bento2-header">
+          <FeatPill color="green" icon="⚡" label="Features" />
+          <h2 className="sup-bento2-h2">Features designed to empower your workflow</h2>
+          <p className="sup-bento2-p">
+            Stay ahead with tools that prioritize your needs, integrating insights and
+            efficiency into one powerful platform.
+          </p>
+        </div>
+
+        {/* Grid */}
+        <div className="sup-bento2-grid">
+
+          {/* Block 1 — Data insights (spans 2 cols) */}
+          <div className="sup-bento2-card span2">
+            <div className="sup-bento2-card-img">
+              <img src={A.bento.chart} alt="Analytics" />
+            </div>
+            <div className="sup-bento2-card-info">
+              <div className="sup-bento2-card-title">Data insights</div>
+              <div className="sup-bento2-card-desc">
+                Make smarter, more informed decisions with powerful and actionable data insights, designed to
+                empower your business with the tools needed to drive growth, efficiency, and success.
+              </div>
+            </div>
+          </div>
+
+          {/* Block 2 — Collaborate together */}
+          <div className="sup-bento2-card">
+            <div className="sup-bento2-collab-area">
+              <img src={A.bento.collabBg} alt="" className="sup-bento2-collab-bg" />
+              <img src={A.bento.collabAv1} alt="" className="sup-bento2-av sup-bento2-av1" />
+              <img src={A.bento.collabAv2} alt="" className="sup-bento2-av sup-bento2-av2" />
+              <img src={A.bento.collabAv3} alt="" className="sup-bento2-av sup-bento2-av3" />
+              <img src={A.bento.collabAv4} alt="" className="sup-bento2-av sup-bento2-av4" />
+            </div>
+            <div className="sup-bento2-card-info">
+              <div className="sup-bento2-card-title">Collaborate together</div>
+              <div className="sup-bento2-card-desc">
+                Collaborate with your team, share updates instantly, and achieve your goals faster.
+              </div>
+            </div>
+          </div>
+
+          {/* Block 3 — App shortcuts */}
+          <div className="sup-bento2-card">
+            <div className="sup-bento2-shortcuts-area">
+              <img src={A.bento.shortcutsBg} alt="" className="sup-bento2-shortcuts-bg" />
+              <div className="sup-bento2-shortcuts-ui">
+                <div className="sup-bento2-keys">
+                  <div className="sup-bento2-key">⌘</div>
+                  <div className="sup-bento2-key">K</div>
+                </div>
+                <div className="sup-bento2-keytag">Command menu</div>
+              </div>
+            </div>
+            <div className="sup-bento2-card-info">
+              <div className="sup-bento2-card-title">App shortcuts</div>
+              <div className="sup-bento2-card-desc">
+                Save time, boost efficiency, and focus on what truly matters for you.
+              </div>
+            </div>
+          </div>
+
+          {/* Block 4 — Seamless integrations */}
+          <div className="sup-bento2-card">
+            <div className="sup-bento2-int-area">
+              <img src={A.bento.intBg} alt="" className="sup-bento2-int-bg" />
+              <div className="sup-bento2-int-icons">
+                <div className="sup-bento2-int-icon" style={{ left: 44, bottom: 56 }}>
+                  <img src={A.bento.intCloud} alt="Cloud" />
+                </div>
+                <div className="sup-bento2-int-icon" style={{ left: '50%', transform: 'translateX(-50%)', top: -13 + 60 }}>
+                  <img src={A.bento.intProline} alt="Proline" />
+                </div>
+                <div className="sup-bento2-int-icon" style={{ right: 48, top: 53 }}>
+                  <img src={A.bento.intLuminous} alt="Luminous" />
+                </div>
+                <div className="sup-bento2-int-center">
+                  <span style={{ fontSize: 14, fontWeight: 600, color: '#020a0f' }}>S</span>
+                </div>
+              </div>
+            </div>
+            <div className="sup-bento2-card-info">
+              <div className="sup-bento2-card-title">Seamless integrations</div>
+              <div className="sup-bento2-card-desc">
+                Seamlessly connect your favorite apps and platforms with our powerful integrations.
+              </div>
+            </div>
+          </div>
+
+          {/* Block 5 — Smart widgets */}
+          <div className="sup-bento2-card">
+            <div className="sup-bento2-card-img">
+              <img src={A.bento.widgets} alt="Widgets" />
+            </div>
+            <div className="sup-bento2-card-info">
+              <div className="sup-bento2-card-title">Smart widgets</div>
+              <div className="sup-bento2-card-desc">
+                Provides real-time data, actionable insights, and key metrics at a glance.
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
-      <div className="feat-panel-body">
-        {lines.slice(0, visible).map((l, i) => (
-          <motion.div
-            className="ll"
-            key={`${l.t}-${i}`}
-            initial={{ opacity: 0, x: -8 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-          >
-            <span className="lt">{l.t}</span>
-            <span className="la">[{l.a}]</span>
-            <span className={`lm ${l.c}`}>{l.m}</span>
-          </motion.div>
-        ))}
-        {visible >= lines.length && (
-          <motion.div className="ll" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-            <span className="lt">—</span>
-            <span className="lm">Awaiting next batch <span className="cursor"></span></span>
-          </motion.div>
-        )}
-      </div>
-    </div>
+    </section>
   );
 }
 
-function Features() {
+// ─── SLIDER ───────────────────────────────────────────────────
+
+const SLIDER_TABS = [
+  {
+    id: 'calendar',
+    label: 'Meaningful calendar',
+    icon: '◷',
+    pill: { color: 'orange', icon: '◷', label: 'Meaningful calendar' },
+    heading: 'Stay organized and on track',
+    desc: 'Effortlessly manage your time and tasks with our intuitive scheduling calendar. Create, modify, and share events with ease.',
+    img: A.slider.calendar,
+  },
+  {
+    id: 'analytics',
+    label: 'Insightful analytics',
+    icon: '◎',
+    pill: { color: 'purple', icon: '◎', label: 'Insightful analytics' },
+    heading: 'Turn data into decisive action',
+    desc: 'Get actionable intelligence from real-time credibility scores and sentiment maps. Track narrative shifts across all your active analyses.',
+    img: A.slider.analytics,
+  },
+  {
+    id: 'integration',
+    label: 'Seamless integration',
+    icon: '⊞',
+    pill: { color: 'blue', icon: '⊞', label: 'Seamless integration' },
+    heading: 'Connect your entire intelligence stack',
+    desc: 'Salinig integrates with your existing tools via REST API and webhooks. Export reports, evidence graphs, and credibility scores to any platform.',
+    img: A.slider.integration,
+  },
+  {
+    id: 'boards',
+    label: 'Effortless boards',
+    icon: '▦',
+    pill: { color: 'green', icon: '▦', label: 'Effortless boards' },
+    heading: 'Organize investigations at scale',
+    desc: 'Track evidence threads, manage analyst workloads, and coordinate intelligence operations with purpose-built boards for your team.',
+    img: A.slider.boards,
+  },
+];
+
+function SliderSection() {
   const [active, setActive] = useState(0);
-  const tab = FEAT_TABS[active];
+  const tab = SLIDER_TABS[active];
   return (
-    <section id="features">
-      <div className="section-inner">
-        <div className="section-header-row">
-          <div>
-            <div className="section-tag">Core Capabilities</div>
-            <h2 className="section-title">One unified pipeline<br/>for credibility intelligence.</h2>
-          </div>
-          <p className="section-desc">Six specialist agents, one evidence graph. From raw signal to verified, scored report — in seconds.</p>
+    <section className="sup-slider2">
+      <div className="sup-slider2-inner">
+        <div className="sup-slider2-header">
+          <FeatPill color="green" icon="⚡" label="Features" />
+          <h2 className="sup-slider2-h2">Suited for every scenario</h2>
+          <p className="sup-slider2-p">
+            Explore the comprehensive suite of tools designed to enhance your
+            productivity and streamline your workflow.
+          </p>
         </div>
-        <motion.div className="feat-tabs" initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.4 }} variants={staggerIn}>
-          {FEAT_TABS.map((t, i) => (
-            <motion.button
+
+        {/* Tab bar */}
+        <div className="sup-slider2-tabs" role="tablist">
+          {SLIDER_TABS.map((t, i) => (
+            <button
               key={t.id}
-              className={`feat-tab ${active === i ? 'active' : ''}`}
+              role="tab"
+              aria-selected={i === active}
+              className={`sup-slider2-tab${i === active ? ' active' : ''}`}
               onClick={() => setActive(i)}
-              variants={riseIn}
-              whileTap={{ scale: 0.98 }}
             >
+              <span>{t.icon}</span>
               {t.label}
-            </motion.button>
+            </button>
           ))}
-        </motion.div>
-        <motion.div className="feat-layout" initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.25 }} variants={staggerIn}>
-          <motion.div className="feat-left" variants={riseIn}>
-            <div className="feat-badge">{tab.badge}</div>
-            <h3 className="feat-name">{tab.name}</h3>
-            <p className="feat-desc">{tab.desc}</p>
-            <ul className="feat-points">
-                {tab.points.map((p, i) => <li key={i}>{p}</li>)}
-            </ul>
-          </motion.div>
-          <motion.div className="feat-right" variants={riseIn}>
-            <FeatPanel key={tab.id} lines={tab.panel} />
-          </motion.div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
-// ─── Why Grid ────────────────────────────────────────────────
-function WhySection() {
-  return (
-    <section id="why">
-      <div className="section-inner">
-        <div className="section-header-row">
-          <div>
-            <div className="section-tag">Why Salinig</div>
-            <h2 className="section-title">Everything your intelligence<br/>team needs, in one system.</h2>
-          </div>
-          <p className="section-desc">Purpose-built for high-stakes environments where accuracy and speed both matter.</p>
         </div>
-        <motion.div className="why-grid" initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} variants={staggerIn}>
-          {WHY_CARDS.map((c: WhyCard, i: number) => (
-            <motion.div className="why-card" key={i} variants={riseIn} whileHover={{ y: -4 }}>
-              <div className={`why-icon ${c.color === 'g' ? 'g' : ''}`}>
-                <span style={{fontSize:16, color: c.color === 'g' ? 'var(--green)' : 'var(--rust)'}}>{c.icon}</span>
-              </div>
-              <div className="why-name">{c.name}</div>
-              <div className="why-desc">{c.desc}</div>
-            </motion.div>
-          ))}
-        </motion.div>
-      </div>
-    </section>
-  );
-}
 
-// ─── How It Works ────────────────────────────────────────────
-function HowSection() {
-  const [active, setActive] = useState(0);
-  const [logVisible, setLogVisible] = useState(0);
-
-  useEffect(() => {
-    const iv = setInterval(() => setActive(a => (a + 1) % STEPS.length), 2400);
-    return () => clearInterval(iv);
-  }, []);
-
-  useEffect(() => {
-    const iv = setInterval(() => setLogVisible(v => v < LOG_LINES.length ? v + 1 : v), 700);
-    return () => clearInterval(iv);
-  }, []);
-
-  return (
-    <section id="how">
-      <div className="section-inner">
-        <div className="section-header-row">
-          <div>
-            <div className="section-tag">Architecture</div>
-            <h2 className="section-title">How Salinig works.</h2>
-          </div>
-          <p className="section-desc">Six agents. One evidence loop. Results that improve with every cycle.</p>
-        </div>
-        <motion.div className="how-layout" initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} variants={staggerIn}>
-          <motion.div className="steps" variants={riseIn}>
-            {STEPS.map((s: Step, i: number) => (
-              <motion.div
-                key={i}
-                className={`step ${active === i ? 'active' : ''}`}
-                onClick={() => setActive(i)}
-                whileHover={{ x: 4 }}
-                whileTap={{ scale: 0.99 }}
-              >
-                <div className="step-circle">0{i+1}</div>
-                <div className="step-content">
-                  <div className="step-agent">{s.agent}</div>
-                  <div className="step-name">{s.name}</div>
-                  <div className="step-desc">{s.desc}</div>
-                  <div className="step-tags">
-                    {s.tags.map((t: string, j: number) => <span key={j} className="step-tag">{t}</span>)}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-          <motion.div className="how-right" variants={riseIn}>
-            <div className="how-panel">
-              <div className="how-panel-bar">
-                <div className="wdot wd-r"></div><div className="wdot wd-y"></div><div className="wdot wd-g"></div>
-                <span className="how-panel-title">salinig / live-pipeline</span>
-              </div>
-              <div className="how-log">
-                {LOG_LINES.slice(0, logVisible).map((l: LogLine, i: number) => (
-                  <motion.div
-                    className="ll"
-                    key={`${l.t}-${i}`}
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.22, ease: 'easeOut' }}
-                  >
-                    <span className="lt">{l.t}</span>
-                    <span className="la">[{l.a}]</span>
-                    <span className={`lm ${l.c}`}>{l.m}</span>
-                  </motion.div>
-                ))}
-                {logVisible >= LOG_LINES.length && (
-                  <motion.div className="ll" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                    <span className="lt">—</span>
-                    <span className="lm">Pipeline active <span className="cursor"></span></span>
-                  </motion.div>
-                )}
-              </div>
-              <div className="how-step-card">
-                <div className="how-step-label">Active Agent</div>
-                <div className="how-step-name">{STEPS[active].agent}</div>
-                <div className="how-step-sub">{STEPS[active].name}</div>
-              </div>
-              <div className="how-prog">
-                <div className="how-prog-fill" style={{width:`${(active+1)/STEPS.length*100}%`}}></div>
-              </div>
-              <div style={{padding:'8px 16px 16px', fontFamily:'var(--font-dm-mono), monospace', fontSize:10, color:'var(--muted)'}}>Step {active+1} of {STEPS.length}</div>
+        {/* Content */}
+        <div className="sup-slider2-content">
+          <div className="sup-slider2-text">
+            <div className="sup-slider2-text-inner">
+              <FeatPill color={tab.pill.color} icon={tab.pill.icon} label={tab.pill.label} />
+              <div className="sup-slider2-heading">{tab.heading}</div>
+              <div className="sup-slider2-desc">{tab.desc}</div>
             </div>
-          </motion.div>
-        </motion.div>
+            <a href="#" className="sup-btn-ghost">Learn more <ArrowIcon color="#020a0f" /></a>
+          </div>
+          <div className="sup-slider2-img">
+            <img src={tab.img} alt={tab.label} />
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
 // ─── FAQ ─────────────────────────────────────────────────────
-function FAQSection() {
-  const cats = Object.keys(FAQ_DATA);
-  const [cat, setCat] = useState(cats[0]);
-  const [open, setOpen] = useState<number | null>(null);
 
+function FAQSection() {
+  const [open, setOpen] = useState<number | null>(null);
   return (
-    <section id="faq">
-      <div className="section-inner">
-        <div className="section-tag">FAQ</div>
-        <h2 className="section-title">Questions, answered.</h2>
-        <div className="faq-layout">
-          <div className="faq-sidebar">
-            <div className="faq-sidebar-title">Topics</div>
-            <div className="faq-cats">
-              {cats.map(c => (
-                <button key={c} className={`faq-cat ${cat === c ? 'active' : ''}`} onClick={() => { setCat(c); setOpen(null); }}>{c}</button>
-              ))}
+    <section id="faq" className="sup-section sup-faq">
+      <div className="sup-section-inner sup-section-centered">
+        <div className="sup-section-label green">⊕ FAQ</div>
+        <h2 className="sup-section-heading" style={{ fontSize: 'clamp(40px, 5vw, 64px)' }}>
+          In case you missed anything
+        </h2>
+        <p className="sup-section-sub">We&apos;re here to answer all your questions.</p>
+        <div className="sup-faq-support">
+          <a href="mailto:hello@salinig.ai" className="sup-btn-ghost">Contact support →</a>
+        </div>
+        <div className="sup-faq-items">
+          {SUP_FAQ_ITEMS.map((item, i) => (
+            <div key={i} className={`sup-faq-item${open === i ? ' open' : ''}`}>
+              <div className="sup-faq-q" onClick={() => setOpen(open === i ? null : i)}>
+                <div className="sup-faq-question">{item.q}</div>
+                <div className="sup-faq-toggle">+</div>
+              </div>
+              <div className="sup-faq-answer">{item.a}</div>
             </div>
-            <div className="faq-contact">
-              <div className="faq-contact-title">Still have questions?</div>
-              <div className="faq-contact-desc">Our team is here to help. Reach out and we&apos;ll get back to you quickly.</div>
-              <a href="mailto:hello@salinig.ai" className="faq-contact-link">Email us →</a>
-            </div>
-          </div>
-          <motion.div className="faq-items" initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} variants={staggerIn}>
-            {FAQ_DATA[cat].map((f, i) => (
-              <motion.div key={i} className={`faq-item ${open === i ? 'open' : ''}`} onClick={() => setOpen(open === i ? null : i)} variants={riseIn}>
-                <div className="faq-q">
-                  <div className="faq-question">{f.q}</div>
-                  <div className="faq-toggle">+</div>
-                </div>
-                <div className="faq-answer">{f.a}</div>
-              </motion.div>
-            ))}
-          </motion.div>
+          ))}
         </div>
       </div>
     </section>
   );
 }
 
-// ─── Tweaks ──────────────────────────────────────────────────
-interface LandingTweaks {
-  accentColor: string;
-  roundness: string;
-  heroUI: boolean;
-}
+// ─── CTA + FOOTER ────────────────────────────────────────────
 
-function TweaksPanel({ tweaks, setTweak }: { tweaks: LandingTweaks; setTweak: (k: keyof LandingTweaks, v: string | boolean) => void }) {
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    const onMsg = (e: MessageEvent) => {
-      if (e.data?.type === '__activate_edit_mode') setOpen(true);
-      if (e.data?.type === '__deactivate_edit_mode') setOpen(false);
-    };
-    window.addEventListener('message', onMsg);
-    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
-    return () => window.removeEventListener('message', onMsg);
-  }, []);
-
-  const accentOpts = ['rust', 'navy', 'forest'];
-  const roundOpts  = ['rounded', 'sharp'];
-
+function CTAAndFooter() {
   return (
-    <div className={`tweaks-panel ${open ? 'open' : ''}`}>
-      <div className="tweaks-panel-title">Tweaks</div>
-      <div className="tweaks-row">
-        <div className="tweaks-label">Accent</div>
-        <div className="tweaks-opts">
-          {accentOpts.map(o => (
-            <button key={o} className={`tweaks-opt ${tweaks.accentColor === o ? 'active' : ''}`}
-              onClick={() => {
-                setTweak('accentColor', o);
-                const map: Record<string, string> = { rust: '0.505 0.130 25', navy: '0.50 0.18 255', forest: '0.50 0.14 145' };
-                const v = map[o];
-                document.documentElement.style.setProperty('--rust', `oklch(${v})`);
-                document.documentElement.style.setProperty('--rust-bg', `oklch(${v} / 0.08)`);
-                document.documentElement.style.setProperty('--rust-border', `oklch(${v} / 0.25)`);
-              }}>{o}</button>
-          ))}
+    <>
+      <div className="sup-cta-section">
+        <div className="sup-cta-card">
+          <div className="sup-cta-dot" style={{ width: 10, height: 10, top: '20%', left: '16%' }} />
+          <div className="sup-cta-dot" style={{ width: 7, height: 7, top: '62%', left: '9%' }} />
+          <div className="sup-cta-dot" style={{ width: 7, height: 7, top: '28%', right: '13%' }} />
+          <div className="sup-cta-dot" style={{ width: 5, height: 5, top: '72%', right: '20%' }} />
+          <div className="sup-cta-dot" style={{ width: 4, height: 4, top: '14%', left: '46%' }} />
+          <h2 className="sup-cta-title">Start your trial today.</h2>
+          <p className="sup-cta-sub">
+            Unlock the power of public sentiment intelligence. Transform your workflows
+            and achieve new heights today.
+          </p>
+          <Link href="/console" className="sup-cta-btn">Open Console →</Link>
         </div>
       </div>
-      <div className="tweaks-row">
-        <div className="tweaks-label">Cards</div>
-        <div className="tweaks-opts">
-          {roundOpts.map(o => (
-            <button key={o} className={`tweaks-opt ${tweaks.roundness === o ? 'active' : ''}`}
-              onClick={() => {
-                setTweak('roundness', o);
-                document.querySelectorAll<HTMLElement>('.why-card,.feat-panel,.how-panel,.hero-card,.faq-contact,.how-step-card').forEach(el => {
-                  el.style.borderRadius = o === 'sharp' ? '4px' : '';
-                });
-              }}>{o}</button>
-          ))}
-        </div>
-      </div>
-      <div className="tweaks-row">
-        <div className="tweaks-label">Hero UI</div>
-        <div className="tweaks-toggle">
-          <div className={`toggle-track ${tweaks.heroUI ? 'on' : ''}`} onClick={() => setTweak('heroUI', !tweaks.heroUI)}>
-            <div className="toggle-thumb"></div>
+
+      <footer className="sup-footer">
+        <div className="sup-footer-inner">
+          <div className="sup-footer-top">
+            <div>
+              <div className="sup-footer-logo">
+                <span className="sup-footer-logo-icon" />
+                Salinig
+              </div>
+              <div className="sup-footer-socials">
+                {['𝕏', 'in', '⊛', '◈'].map((icon, i) => (
+                  <a key={i} href="#" className="sup-footer-social">{icon}</a>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="sup-footer-col-title">Product</div>
+              <div className="sup-footer-links">
+                <a href="#features">Features</a>
+                <a href="#">Integrations</a>
+                <a href="#">Changelog</a>
+                <a href="#">Pricing</a>
+                <a href="/console">Open Console</a>
+              </div>
+            </div>
+            <div>
+              <div className="sup-footer-col-title">Company</div>
+              <div className="sup-footer-links">
+                <a href="#">About</a>
+                <a href="#">Blog</a>
+                <a href="#">Careers</a>
+                <a href="#">Contact</a>
+              </div>
+            </div>
+            <div>
+              <div className="sup-footer-col-title">Resources</div>
+              <div className="sup-footer-links">
+                <a href="#">Documentation</a>
+                <a href="#">Research</a>
+                <a href="#">API Reference</a>
+                <a href="#">Status</a>
+              </div>
+            </div>
+            <div>
+              <div className="sup-footer-col-title">Legal</div>
+              <div className="sup-footer-links">
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Use</a>
+                <a href="#">Security</a>
+                <a href="#">Cookie Policy</a>
+              </div>
+            </div>
           </div>
-          <span className="toggle-label">Show dashboard card</span>
+          <div className="sup-footer-bottom">
+            <div className="sup-footer-copy">© Salinig, 2026. All rights reserved.</div>
+            <div className="sup-footer-copy">hello@salinig.ai</div>
+          </div>
         </div>
-      </div>
-    </div>
+      </footer>
+    </>
   );
 }
 
-// ─── App ─────────────────────────────────────────────────────
-export default function LandingApp() {
-  const [tweaks, setTweakState] = useState<LandingTweaks>(TWEAK_DEFAULTS);
-  const setTweak = (k: keyof LandingTweaks, v: string | boolean) => {
-    setTweakState(prev => ({ ...prev, [k]: v }));
-    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
-  };
+// ─── Main Export ─────────────────────────────────────────────
 
+export default function LandingApp() {
   return (
     <>
-      {/* ── HERO ── */}
-      <motion.section
-        id="home"
-        initial="hidden"
-        animate="show"
-        variants={staggerIn}
-      >
-        <div className="hero-inner">
-          <motion.div className="hero-copy" variants={staggerIn}>
-            <motion.div className="hero-badge" variants={riseIn} whileHover={{ y: -2 }}>
-              <div className="hero-badge-dot"></div>
-              Real-time evidence verification v2
-            </motion.div>
-            <motion.h1 className="hero-title" variants={riseIn}>
-              Public sentiment,<br/><em>verified</em> in seconds.
-            </motion.h1>
-            <motion.p className="hero-sub" variants={riseIn}>
-              Salinig turns noisy public discourse into verified, scored, and auditable intelligence with self-learning agents and cyclic retrieval.
-            </motion.p>
-            <motion.div className="hero-actions" variants={riseIn}>
-              <motion.button className="btn-primary" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => { window.location.href = '/console'; }}>Open console</motion.button>
-              <motion.button className="btn-outline" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => document.getElementById('how')?.scrollIntoView({block:'start'})}>See workflow</motion.button>
-            </motion.div>
-            <motion.div className="hero-metrics" variants={riseIn}>
-              <div className="hero-metric">
-                <strong>87</strong>
-                <span>credibility score</span>
-              </div>
-              <div className="hero-metric">
-                <strong>18</strong>
-                <span>sources checked</span>
-              </div>
-              <div className="hero-metric">
-                <strong>2</strong>
-                <span>RAG cycles</span>
-              </div>
-            </motion.div>
-          </motion.div>
-
-          {tweaks.heroUI && (
-            <motion.div className="hero-visual" variants={riseIn}>
-              <ConsoleDashboard />
-            </motion.div>
-          )}
-        </div>
-      </motion.section>
-
-      {/* ── MARQUEE ── */}
-      <Marquee />
-
-      {/* ── INTRO ── */}
-      <div className="intro-section">
-        <div className="intro-tag">About Salinig</div>
-        <div className="intro-body">
-          <p>Salinig is a credibility intelligence platform that turns the noise of public discourse into verified, scored, and auditable intelligence.</p>
-          <p className="dim">It connects six specialized agents in a single pipeline — ingesting signals, routing queries, retrieving evidence in iterative cycles, and verifying claims against independent sources in real time.</p>
-          <p className="dimmer">From sentiment shifts to factual contradictions, Salinig surfaces the truth faster than any manual review — and gets measurably better with every cycle.</p>
-        </div>
-      </div>
-
-      {/* ── FEATURES ── */}
-      <Features />
-
-      {/* ── WHY ── */}
-      <WhySection />
-
-      {/* ── HOW ── */}
-      <HowSection />
-
-      {/* ── FAQ ── */}
+      <HeroSection />
+      <FeatureBlocksSection />
+      <BentoGridSection />
+      <SliderSection />
       <FAQSection />
-
-      {/* ── CTA ── */}
-      <motion.div className="cta-section" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.7 }}>
-        <div className="cta-inner">
-          <motion.div className="cta-eyebrow" initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.1 }}>
-            Start today
-          </motion.div>
-          <motion.h2 className="cta-title" initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.7, delay: 0.18, ease: [0.22, 1, 0.36, 1] }}>
-            Truth is a signal.<br/><em>We find it.</em>
-          </motion.h2>
-          <motion.p className="cta-sub" initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.28 }}>
-            Set up in minutes. No infrastructure changes. Verified results from the first prompt.
-          </motion.p>
-          <motion.div className="cta-actions" initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: 0.36 }}>
-            <motion.button className="btn-light" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => { window.location.href = '/console'; }}>
-              Request access
-            </motion.button>
-            <motion.button className="cta-ghost" whileHover={{ y: -2 }} whileTap={{ scale: 0.98 }} onClick={() => document.getElementById('how')?.scrollIntoView({ block: 'start' })}>
-              See how it works →
-            </motion.button>
-          </motion.div>
-          <motion.div className="cta-proof" initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} transition={{ duration: 0.6, delay: 0.48 }}>
-            <span className="cta-proof-item">87 avg credibility score</span>
-            <span className="cta-proof-item">2,847 signals analyzed</span>
-            <span className="cta-proof-item">Zero setup required</span>
-          </motion.div>
-        </div>
-      </motion.div>
-
-      {/* ── FOOTER ── */}
-      <footer>
-        <div className="footer-grid">
-          <div className="footer-brand">
-            <div className="footer-logo">Salinig</div>
-            <div className="footer-tagline">Self-Learning Multi-Agent Credibility Intelligence System</div>
-          </div>
-          <div>
-            <div className="footer-col-title">Product</div>
-            <div className="footer-links">
-              <a href="#home">Home</a>
-              <a href="#features">Features</a>
-              <a href="#how">How It Works</a>
-              <a href="#faq">FAQ</a>
-            </div>
-          </div>
-          <div>
-            <div className="footer-col-title">Company</div>
-            <div className="footer-links">
-              <a href="#">About</a>
-              <a href="#">Research</a>
-              <a href="#">Careers</a>
-              <a href="#">Blog</a>
-            </div>
-          </div>
-          <div>
-            <div className="footer-col-title">Legal</div>
-            <div className="footer-links">
-              <a href="#">Privacy Policy</a>
-              <a href="#">Terms of Use</a>
-              <a href="#">Security</a>
-            </div>
-          </div>
-        </div>
-        <div className="footer-bottom">
-          <div className="footer-copy">© Salinig, 2026. All rights reserved.</div>
-          <div className="footer-copy">hello@salinig.ai</div>
-        </div>
-      </footer>
-
-      {/* ── TWEAKS ── */}
-      <TweaksPanel tweaks={tweaks} setTweak={setTweak} />
+      <CTAAndFooter />
     </>
   );
 }
