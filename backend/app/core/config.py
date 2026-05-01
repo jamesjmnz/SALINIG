@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -38,6 +40,10 @@ class Settings(BaseSettings):
     SALINIG_RATE_LIMIT_REQUESTS: int = 20
     SALINIG_RATE_LIMIT_WINDOW_SECONDS: int = 60
     SALINIG_CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001"
+    SALINIG_SAVED_REPORTS_PATH: str = str(
+        Path(__file__).resolve().parents[2] / ".salinig" / "saved_reports.json"
+    )
+    SALINIG_SAVED_REPORTS_LIMIT: int = 50
 
     class Config:
         env_file = "../.env"

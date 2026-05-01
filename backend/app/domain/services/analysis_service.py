@@ -4,7 +4,6 @@ import time
 from typing import Any
 
 from app.core.config import settings
-from app.domain.services.analysis_cache import cache_latest_successful
 from app.schemas.analysis_schema import (
     AnalysisDiagnostics,
     AnalysisMode,
@@ -62,7 +61,6 @@ class AnalysisService:
         result = self.graph.invoke(self._initial_state(request))
         result = self._completed_result(result, started_at)
         response = self._to_response(result, include_diagnostics=include_diagnostics)
-        cache_latest_successful(response)
         return response.model_dump(
             mode="json",
             exclude_none=True,
@@ -92,7 +90,6 @@ class AnalysisService:
 
         result = self._completed_result(latest_state, started_at)
         response = self._to_response(result, include_diagnostics=request.include_diagnostics)
-        cache_latest_successful(response)
         yield {
             "type": "final",
             "node": "analysis_service",

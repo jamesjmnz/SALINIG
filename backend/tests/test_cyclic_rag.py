@@ -578,13 +578,73 @@ class ApiContractTests(unittest.TestCase):
         from app.schemas.analysis_schema import AnalysisResponse
         from app.domain.services.analysis_cache import cache_latest_successful
 
-        cache_latest_successful(AnalysisResponse.model_validate(minimal_api_response()))
+        saved = cache_latest_successful(AnalysisResponse.model_validate(minimal_api_response()))
 
         response = self.client.get("/api/v1/analysis/latest")
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["cached"])
+        self.assertEqual(body["report_id"], saved.report_id)
+        self.assertEqual(body["analysis"]["final_report"], "Report")
+
+    def test_saved_reports_can_be_created_manually(self):
+        response = self.client.post("/api/v1/analysis/saved", json=minimal_api_response())
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["report_id"])
+        self.assertEqual(body["analysis"]["final_report"], "Report")
+
+        saved_reports = self.client.get("/api/v1/analysis/saved").json()["reports"]
+        self.assertEqual(len(saved_reports), 1)
+        self.assertEqual(saved_reports[0]["report_id"], body["report_id"])
+
+    def test_save_endpoint_accepts_unpassed_reports(self):
+        payload = minimal_api_response()
+        payload["quality"]["passed"] = False
+        payload["quality_passed"] = False
+        payload["quality"]["score"] = 0.42
+        payload["quality_score"] = 0.42
+
+        response = self.client.post("/api/v1/analysis/saved", json=payload)
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertFalse(body["analysis"]["quality"]["passed"])
+        self.assertFalse(body["analysis"]["quality_passed"])
+
+        saved_reports = self.client.get("/api/v1/analysis/saved").json()["reports"]
+        self.assertEqual(len(saved_reports), 1)
+        self.assertFalse(saved_reports[0]["quality_passed"])
+
+    def test_saved_reports_endpoint_returns_archived_summaries(self):
+        from app.schemas.analysis_schema import AnalysisResponse
+        from app.domain.services.analysis_cache import cache_latest_successful
+
+        cache_latest_successful(AnalysisResponse.model_validate(minimal_api_response()))
+
+        response = self.client.get("/api/v1/analysis/saved")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(len(body["reports"]), 1)
+        self.assertEqual(body["reports"][0]["place"], "Philippines")
+        self.assertEqual(body["reports"][0]["signal_count"], 1)
+        self.assertTrue(body["reports"][0]["report_id"])
+
+    def test_saved_report_detail_endpoint_returns_archived_analysis(self):
+        from app.schemas.analysis_schema import AnalysisResponse
+        from app.domain.services.analysis_cache import cache_latest_successful
+
+        cache_latest_successful(AnalysisResponse.model_validate(minimal_api_response()))
+        saved = self.client.get("/api/v1/analysis/saved").json()["reports"][0]
+
+        response = self.client.get(f"/api/v1/analysis/saved/{saved['report_id']}")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["report_id"], saved["report_id"])
         self.assertEqual(body["analysis"]["final_report"], "Report")
 
     def test_request_validation_rejects_unbounded_theme_payloads(self):
