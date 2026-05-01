@@ -53,14 +53,17 @@ function progressPercent(progress: AnalysisProgressEvent | null) {
     queued: 5,
     query_gen: 16,
     research: 35,
+    evidence_gate: 43,
     analysis: 52,
     insight: 68,
+    claim_verification: 74,
     citation_validation: 78,
     evaluate: 88,
     learn: 92,
     save: 96,
     complete: 96,
     finalize: 96,
+    insufficient_evidence: 100,
     analysis_service: 100,
   };
   if (!progress) return 0;
@@ -124,6 +127,9 @@ function SentimentViewContent({
 
   const report = analysis?.sentiment_report;
   const metrics = report?.metrics;
+  const diagnostics = analysis?.diagnostics;
+  const evidenceSufficiency = diagnostics?.evidence_sufficiency;
+  const claimVerification = diagnostics?.claim_verification;
   const selectedThemeNames = useMemo(
     () => (analysis?.prioritize_themes?.length ? analysis.prioritize_themes : selectedCategories),
     [analysis?.prioritize_themes, selectedCategories],
@@ -234,7 +240,7 @@ function SentimentViewContent({
         </div>
         <div className="analysis-run-footer">
           <div className="analysis-status-text">
-            {error || (running ? (progress?.label ?? 'Running cyclic RAG analysis') : analysis ? `${analysis.place} · ${analysis.monitoring_window}` : 'Saved report detail will appear here after a successful run')}
+            {error || (running ? (progress?.label ?? 'Running cyclic RAG analysis') : analysis ? `${analysis.place} · ${analysis.monitoring_window} · ${analysis.analysis_status.replace('_', ' ')}` : 'Saved report detail will appear here after a successful run')}
           </div>
           <div className="analysis-run-actions">
             {analysis ? (
@@ -255,6 +261,11 @@ function SentimentViewContent({
           </div>
         </div>
         {saveHint ? <div className="analysis-save-note">{saveHint}</div> : null}
+        {analysis?.analysis_status === 'insufficient_evidence' && evidenceSufficiency?.reasons?.length ? (
+          <div className="analysis-save-note" style={{ color: 'var(--rust)' }}>
+            {evidenceSufficiency.reasons.join(' ')}
+          </div>
+        ) : null}
         {running && (
           <div className="analysis-progress">
             <div className="analysis-progress-track">
@@ -301,6 +312,67 @@ function SentimentViewContent({
         </div>
       </div>
 
+      {analysis && (
+        <div className="dash-grid" style={{ marginTop: 16 }}>
+          <div className="panel">
+            <div className="panel-head">
+              <span className="panel-title">Evidence Gate</span>
+              <span className="panel-action">{evidenceSufficiency?.checked ? (evidenceSufficiency.passed ? 'passed' : 'hold') : 'waiting'}</span>
+            </div>
+            <div style={{ padding: '0 20px 18px', display: 'grid', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>Ranked sources</span>
+                <strong>{evidenceSufficiency?.source_count ?? 0}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>Unique domains</span>
+                <strong>{evidenceSufficiency?.unique_domain_count ?? 0}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>Official sources</span>
+                <strong>{evidenceSufficiency?.official_source_count ?? 0}</strong>
+              </div>
+              {(evidenceSufficiency?.reasons?.length ?? 0) > 0 ? (
+                <div className="report-note-list">
+                  {evidenceSufficiency?.reasons.map(reason => (
+                    <div className="report-note-item" key={reason}>{reason}</div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+                  The backend now checks whether the run has enough source depth before generating the report.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-head">
+              <span className="panel-title">Claim Verification</span>
+              <span className="panel-action">{claimVerification?.checked ? claimVerification.model : 'waiting'}</span>
+            </div>
+            <div style={{ padding: '0 20px 18px', display: 'grid', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>Claims checked</span>
+                <strong>{claimVerification?.claims.length ?? 0}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>Verified</span>
+                <strong>{claimVerification?.verified_claim_count ?? 0}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>Unsupported</span>
+                <strong>{claimVerification?.unsupported_claim_count ?? 0}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>Contradicted</span>
+                <strong>{claimVerification?.contradicted_claim_count ?? 0}</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {analysis && report && (
         <div className="dash-grid" style={{marginTop:16}}>
           <div className="panel">
@@ -318,6 +390,7 @@ function SentimentViewContent({
                       ? <a className="source-link" href={signal.url} target="_blank" rel="noreferrer">{signal.source}</a>
                       : <span className="signal-source">{signal.source}</span>
                     }
+                    <span className="signal-time">S{signal.source_index}</span>
                     <span className="signal-time">{signal.sentiment}</span>
                     <span className="signal-time">{signal.credibility ?? 'Unverified'} · {signal.credibility_score ?? 0}/100</span>
                     <span className={`report-badge ${signal.verification === 'verified' ? 'verified' : 'flagged'}`}>{signal.verification}</span>
