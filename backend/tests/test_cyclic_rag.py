@@ -29,6 +29,7 @@ from app.domain.services.analysis_service import AnalysisService
 from app.domain.services.analysis_cache import (
     clear_latest_successful_analysis,
 )
+from app.domain.services.analysis_feedback import clear_feedback
 from app.core.config import settings
 from app.core.rate_limit import analysis_rate_limiter
 from app.main import app
@@ -175,7 +176,7 @@ class CyclicRagTests(unittest.TestCase):
             return [
                 {
                     "title": f"Source {index}",
-                    "url": f"https://example.com/source-{index}",
+                    "url": f"https://source-{index}.example.com/source-{index}",
                     "content": f"Evidence batch {index}",
                 }
             ]
@@ -203,6 +204,27 @@ class CyclicRagTests(unittest.TestCase):
                 "error": None,
             }
 
+        def fake_rerank_sources(query, items, top_k=None):
+            ranked = []
+            for index, item in enumerate(items, start=1):
+                ranked.append(
+                    {
+                        **item,
+                        "source_index": index,
+                        "domain": f"source-{index}.example.com",
+                        "official": False,
+                        "rerank_score": round(1.0 - (index * 0.01), 4),
+                    }
+                )
+            return ranked[: top_k or len(ranked)]
+
+        def fake_claim_support(premise, hypothesis):
+            return {
+                "label": "supported",
+                "confidence": 0.91,
+                "model": "test-nli",
+            }
+
         llm_targets = [
             "app.infrastructure.graph.nodes.sentiment_node.get_llm",
             "app.infrastructure.graph.nodes.credibility_node.get_llm",
@@ -221,6 +243,12 @@ class CyclicRagTests(unittest.TestCase):
             )
             stack.enter_context(
                 patch(
+                    "app.infrastructure.graph.nodes.collect_node.rerank_sources",
+                    side_effect=fake_rerank_sources,
+                )
+            )
+            stack.enter_context(
+                patch(
                     "app.infrastructure.graph.nodes.memory_node.retrieve_with_diagnostics",
                     side_effect=fake_retrieve,
                 )
@@ -229,6 +257,12 @@ class CyclicRagTests(unittest.TestCase):
                 patch(
                     "app.infrastructure.graph.nodes.save_node.save_learning",
                     side_effect=fake_save_learning,
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "app.infrastructure.graph.nodes.claim_verification_node.classify_claim_support",
+                    side_effect=fake_claim_support,
                 )
             )
             roberta_mock = stack.enter_context(
@@ -328,6 +362,91 @@ class CyclicRagTests(unittest.TestCase):
         self.assertEqual(analysis_trace["sentiment_label"], "Neutral")
         self.assertEqual(analysis_trace["sentiment_weights"], {"roberta": 0.4, "llm": 0.6})
         self.assertIn("sentiment_blended_scores", analysis_trace)
+
+    def test_diagnostics_include_evidence_sufficiency_and_claim_verification(self):
+        response, _search_calls, _saved = self.run_analysis(
+            [evaluation(0.84, feedback="Grounded report")]
+        )
+
+        diagnostics = response["diagnostics"]
+        self.assertTrue(diagnostics["evidence_sufficiency"]["checked"])
+        self.assertTrue(diagnostics["evidence_sufficiency"]["passed"])
+        self.assertGreaterEqual(diagnostics["evidence_sufficiency"]["source_count"], 2)
+        self.assertTrue(diagnostics["claim_verification"]["checked"])
+        self.assertGreaterEqual(diagnostics["claim_verification"]["verified_claim_count"], 1)
+        self.assertEqual(diagnostics["claim_verification"]["contradicted_claim_count"], 0)
+        self.assertIn("claims", diagnostics["claim_verification"])
+
+    def test_insufficient_evidence_gate_stops_before_analysis(self):
+        old_min_sources = settings.RAG_MIN_SOURCES_REQUIRED
+        old_min_domains = settings.RAG_MIN_UNIQUE_DOMAINS_REQUIRED
+        settings.RAG_MIN_SOURCES_REQUIRED = 2
+        settings.RAG_MIN_UNIQUE_DOMAINS_REQUIRED = 2
+
+        def fake_search(query, monitoring_window=None, **kwargs):
+            return [
+                {
+                    "title": "Only Source",
+                    "url": "https://example.com/only-source",
+                    "content": "Single-source evidence",
+                }
+            ]
+
+        def fake_rerank_sources(query, items, top_k=None):
+            return [
+                {
+                    **items[0],
+                    "source_index": 1,
+                    "domain": "example.com",
+                    "official": False,
+                    "rerank_score": 0.88,
+                }
+            ]
+
+        def fake_retrieve(query, k=None):
+            return {"context": "", "memories": [], "error": None}
+
+        try:
+            with ExitStack() as stack:
+                stack.enter_context(
+                    patch("app.infrastructure.graph.nodes.collect_node.search", side_effect=fake_search)
+                )
+                stack.enter_context(
+                    patch(
+                        "app.infrastructure.graph.nodes.collect_node.rerank_sources",
+                        side_effect=fake_rerank_sources,
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "app.infrastructure.graph.nodes.memory_node.retrieve_with_diagnostics",
+                        side_effect=fake_retrieve,
+                    )
+                )
+                stack.enter_context(
+                    patch(
+                        "app.infrastructure.graph.nodes.analysis_node.get_llm",
+                        side_effect=AssertionError("analysis should not run"),
+                    )
+                )
+
+                response = AnalysisService().analyze(
+                    AnalyzeRequest(
+                        place="Philippines",
+                        monitoring_window="past 24 hours",
+                        prioritize_themes=["Transportation & Infrastructure"],
+                        include_diagnostics=True,
+                    )
+                )
+        finally:
+            settings.RAG_MIN_SOURCES_REQUIRED = old_min_sources
+            settings.RAG_MIN_UNIQUE_DOMAINS_REQUIRED = old_min_domains
+
+        self.assertEqual(response["analysis_status"], "insufficient_evidence")
+        self.assertIn("INSUFFICIENT EVIDENCE", response["final_report"])
+        self.assertFalse(response["quality_passed"])
+        self.assertTrue(response["diagnostics"]["evidence_sufficiency"]["checked"])
+        self.assertFalse(response["diagnostics"]["evidence_sufficiency"]["passed"])
 
     def test_repair_path_loops_once_then_saves(self):
         response, search_calls, saved = self.run_analysis(
@@ -480,12 +599,14 @@ class ApiContractTests(unittest.TestCase):
         settings.SALINIG_API_KEY = None
         settings.SALINIG_RATE_LIMIT_REQUESTS = 20
         clear_latest_successful_analysis()
+        clear_feedback()
         analysis_rate_limiter.clear()
         self.client = TestClient(app)
 
     def tearDown(self):
         analysis_rate_limiter.clear()
         clear_latest_successful_analysis()
+        clear_feedback()
         settings.SALINIG_API_KEY = self.old_api_key
         settings.SALINIG_RATE_LIMIT_REQUESTS = self.old_rate_limit
 
@@ -699,6 +820,38 @@ class ApiContractTests(unittest.TestCase):
 
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 429)
+
+    def test_feedback_endpoints_capture_and_export_analyst_labels(self):
+        create_response = self.client.post(
+            "/api/v1/analysis/feedback",
+            json={
+                "report_id": "report-123",
+                "score": 4,
+                "useful": True,
+                "accurate": False,
+                "notes": "Claim needs stronger support",
+                "flagged_claim_ids": ["signal-1"],
+                "tags": ["grounding", "review"],
+            },
+        )
+
+        self.assertEqual(create_response.status_code, 200)
+        created = create_response.json()
+        self.assertEqual(created["report_id"], "report-123")
+        self.assertEqual(created["flagged_claim_ids"], ["signal-1"])
+
+        list_response = self.client.get("/api/v1/analysis/feedback")
+        self.assertEqual(list_response.status_code, 200)
+        listed = list_response.json()["feedback"]
+        self.assertEqual(len(listed), 1)
+        self.assertEqual(listed[0]["feedback_id"], created["feedback_id"])
+
+        export_response = self.client.get("/api/v1/analysis/feedback/export")
+        self.assertEqual(export_response.status_code, 200)
+        exported = export_response.json()
+        self.assertEqual(exported["summary"]["total_feedback"], 1)
+        self.assertEqual(exported["summary"]["most_flagged_claim_ids"], ["signal-1"])
+        self.assertFalse(exported["summary"]["ready_for_fine_tuning"])
 
 
 class AdapterAndValidationTests(unittest.TestCase):
