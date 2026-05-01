@@ -1,3 +1,23 @@
+export interface LogoItem { name: string; }
+export interface FaqSimpleItem { q: string; a: string; }
+
+export const LOGOS: LogoItem[] = [
+  { name: 'Orbitc' },
+  { name: 'CloudBase' },
+  { name: 'Proline' },
+  { name: 'Amsterdam' },
+  { name: 'Luminous' },
+  { name: 'Pixelwave' },
+];
+
+export const SUP_FAQ_ITEMS: FaqSimpleItem[] = [
+  { q: 'Is my data safe with your platform?', a: 'Salinig uses end-to-end encryption for all data in transit and at rest. We do not store raw signal content beyond the analysis window, and all credibility reports are access-controlled by your organization.' },
+  { q: 'What kind of support do you offer?', a: 'We offer email support for all plans, with priority support and dedicated account management for enterprise customers. Most requests are handled within 4 business hours.' },
+  { q: 'How does pricing work?', a: 'Pricing is based on the number of analyses run per month and the number of team members. We offer flexible plans starting from a pilot tier for qualifying organizations.' },
+  { q: 'Can I cancel at any time?', a: 'Yes. There are no long-term contracts required. You can downgrade or cancel your plan at any time from your account settings, effective at the end of your current billing period.' },
+  { q: 'Can I upgrade or downgrade my subscription?', a: 'Absolutely. You can upgrade immediately to access more capacity, or downgrade at the end of your billing cycle. Prorated credits apply when upgrading mid-cycle.' },
+];
+
 export interface LogLine {
   t: string;
   a: string;

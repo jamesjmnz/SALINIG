@@ -2,16 +2,21 @@ import Link from 'next/link';
 
 export default function Nav() {
   return (
-    <nav>
-      <Link className="nav-logo" href="/">Salinig</Link>
-      <ul className="nav-links">
-        <li><a href="#home">Home</a></li>
-        <li><a href="#features">Features</a></li>
-        <li><a href="#how">How It Works</a></li>
-        <li><a href="#faq">FAQ</a></li>
-      </ul>
-      <div className="nav-right">
-        <Link href="/console" className="nav-cta">Open Console →</Link>
+    <nav className="sup-nav">
+      <div className="sup-nav-inner">
+        <Link className="sup-nav-logo" href="/">
+          <span className="sup-nav-logo-icon" aria-hidden="true" />
+          Salinig
+        </Link>
+        <ul className="sup-nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#collab">How It Works</a></li>
+          <li><a href="#faq">FAQ</a></li>
+          <li><a href="#">Blog</a></li>
+        </ul>
+        <div className="sup-nav-right">
+          <Link href="/console" className="sup-nav-cta">Open Console →</Link>
+        </div>
       </div>
     </nav>
   );

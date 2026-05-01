@@ -1,6 +1,11 @@
 import type { Metadata } from 'next';
-import { Instrument_Serif, DM_Sans, DM_Mono } from 'next/font/google';
+import { Inter, Instrument_Serif, DM_Sans, DM_Mono } from 'next/font/google';
 import './globals.css';
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+});
 
 const instrumentSerif = Instrument_Serif({
   weight: '400',
@@ -36,7 +41,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${instrumentSerif.variable} ${dmSans.variable} ${dmMono.variable}`}
+      className={`${inter.variable} ${instrumentSerif.variable} ${dmSans.variable} ${dmMono.variable}`}
     >
       <body>{children}</body>
     </html>
