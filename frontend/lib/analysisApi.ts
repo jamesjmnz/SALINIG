@@ -2,8 +2,11 @@ export type AnalysisMode = 'fast_draft' | 'full';
 export type MonitoringWindow = 'past 24 hours' | 'past 7 days' | 'past 30 days';
 export type AnalysisStatus = 'loading-cache' | 'idle' | 'running' | 'error';
 export type AnalysisProgressType = 'status' | 'final' | 'error';
+export type AnalysisRunStatus = 'completed' | 'insufficient_evidence';
+export type ClaimSupportLabel = 'supported' | 'mixed' | 'contradicted' | 'unclear';
 
 export interface SentimentSourceSignal {
+  source_index: number;
   source: string;
   title: string;
   url?: string | null;
@@ -43,6 +46,97 @@ export interface QualityResult {
   blocking_issues: string[];
 }
 
+export interface RankedEvidenceSource {
+  source_index: number;
+  title: string;
+  url?: string | null;
+  published?: string | null;
+  score?: number | string | null;
+  content_preview?: string | null;
+  domain: string;
+  official: boolean;
+  rerank_score?: number | null;
+}
+
+export interface EvidenceSufficiencyResult {
+  checked: boolean;
+  passed: boolean;
+  source_count: number;
+  unique_domain_count: number;
+  official_source_count: number;
+  reasons: string[];
+  ranked_sources: RankedEvidenceSource[];
+}
+
+export interface ClaimEvidenceLink {
+  source_index: number;
+  title: string;
+  url?: string | null;
+  domain: string;
+  support_label: ClaimSupportLabel;
+  support_score: number;
+  rationale: string;
+}
+
+export interface ReportClaim {
+  claim_id: string;
+  text: string;
+  claim_type: 'overview' | 'signal' | 'insight' | 'finding';
+  source_indexes: number[];
+  support_status: 'supported' | 'mixed' | 'contradicted' | 'unsupported';
+  evidence_links: ClaimEvidenceLink[];
+}
+
+export interface ContradictionAlert {
+  claim_id: string;
+  claim_text: string;
+  source_index: number;
+  source_title: string;
+  url?: string | null;
+  label: ClaimSupportLabel;
+  confidence: number;
+  rationale: string;
+}
+
+export interface ClaimVerificationSummary {
+  checked: boolean;
+  verified_claim_count: number;
+  contradicted_claim_count: number;
+  unsupported_claim_count: number;
+  model: string;
+  claims: ReportClaim[];
+  contradictions: ContradictionAlert[];
+}
+
+export interface AnalysisDiagnostics {
+  search_queries: string[];
+  collected_sources: Array<{
+    title: string;
+    url?: string | null;
+    published?: string | null;
+    score?: number | string | null;
+    content_preview?: string | null;
+  }>;
+  retrieved_memories: Array<{
+    content: string;
+    metadata: Record<string, unknown>;
+    score?: number | null;
+  }>;
+  cycle_trace: Array<Record<string, unknown>>;
+  learning_note: string;
+  learning_citations: string[];
+  memory_error?: string | null;
+  memory_save_error?: string | null;
+  evidence_sufficiency: EvidenceSufficiencyResult;
+  claim_verification: ClaimVerificationSummary;
+  citation_validation: {
+    checked: boolean;
+    passed: boolean;
+    unsupported_urls: string[];
+    unsupported_source_titles: string[];
+  };
+}
+
 export interface AnalysisResponse {
   channel: 'web_search';
   monitoring_window: MonitoringWindow;
@@ -50,6 +144,7 @@ export interface AnalysisResponse {
   focus_terms: string[];
   place: string;
   analysis_mode: AnalysisMode;
+  analysis_status: AnalysisRunStatus;
   final_report: string;
   sentiment_report?: SentimentReport | null;
   iteration: number;
@@ -57,6 +152,7 @@ export interface AnalysisResponse {
   quality: QualityResult;
   memory_saved: boolean;
   memory_duplicate: boolean;
+  diagnostics?: AnalysisDiagnostics | null;
   quality_score: number;
   quality_breakdown: Record<string, number>;
   quality_passed: boolean;
@@ -114,6 +210,7 @@ export interface AnalyzePayload {
   prioritize_themes: string[];
   focus_terms: string[];
   analysis_mode: AnalysisMode;
+  include_diagnostics?: boolean;
 }
 
 export interface AnalysisProgressEvent {
@@ -128,6 +225,38 @@ export interface AnalysisProgressEvent {
   quality_score?: number;
   quality_passed?: boolean;
   analysis?: AnalysisResponse;
+}
+
+export interface AnalystFeedbackPayload {
+  report_id?: string | null;
+  score: number;
+  useful: boolean;
+  accurate: boolean;
+  notes?: string | null;
+  flagged_claim_ids: string[];
+  tags: string[];
+}
+
+export interface AnalystFeedbackRecord extends AnalystFeedbackPayload {
+  feedback_id: string;
+  created_at: string;
+}
+
+export interface AnalystFeedbackListResponse {
+  feedback: AnalystFeedbackRecord[];
+}
+
+export interface AnalystFeedbackExportResponse {
+  summary: {
+    total_feedback: number;
+    useful_positive_count: number;
+    inaccurate_count: number;
+    average_score: number;
+    ready_for_fine_tuning: boolean;
+    recommendation: string;
+    most_flagged_claim_ids: string[];
+  };
+  feedback: AnalystFeedbackRecord[];
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_SALINIG_PROXY_BASE ?? '/api';
@@ -185,7 +314,7 @@ export function saveAnalysisReport(analysis: AnalysisResponse) {
 export function runAnalysis(payload: AnalyzePayload) {
   return apiJson<AnalysisResponse>('/analysis', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, include_diagnostics: payload.include_diagnostics ?? true }),
   });
 }
 
@@ -214,7 +343,7 @@ export async function streamAnalysis(
   const response = await fetch(`${API_BASE}/analysis/stream`, {
     method: 'POST',
     headers: headers(),
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, include_diagnostics: payload.include_diagnostics ?? true }),
   });
 
   if (!response.ok) {
@@ -261,4 +390,19 @@ export async function streamAnalysis(
   if (streamedError) throw streamedError;
   if (!finalAnalysis) throw new Error('Analysis stream ended before a final report was received.');
   return finalAnalysis;
+}
+
+export function submitAnalystFeedback(payload: AnalystFeedbackPayload) {
+  return apiJson<AnalystFeedbackRecord>('/analysis/feedback', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchAnalystFeedback() {
+  return apiJson<AnalystFeedbackListResponse>('/analysis/feedback');
+}
+
+export function fetchAnalystFeedbackExport() {
+  return apiJson<AnalystFeedbackExportResponse>('/analysis/feedback/export');
 }
