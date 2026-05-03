@@ -48,6 +48,7 @@ backend/venv/
 # FastAPI, LangChain, and local runtime artifacts
 .langchain_cache.db
 backend/.langchain_cache.db
+backend/.salinig/
 *.sqlite
 *.sqlite3
 *.db
