@@ -5,12 +5,51 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
-UVICORN_BIN="$BACKEND_DIR/venv/bin/uvicorn"
 QDRANT_CONTAINER_NAME="${QDRANT_CONTAINER_NAME:-salinig-qdrant}"
 QDRANT_IMAGE="${QDRANT_IMAGE:-qdrant/qdrant:latest}"
 QDRANT_HTTP_PORT="${QDRANT_HTTP_PORT:-6333}"
 QDRANT_GRPC_PORT="${QDRANT_GRPC_PORT:-6334}"
+ENV_FILE="$ROOT_DIR/.env"
+DOCKER_COMPOSE_FILE="$ROOT_DIR/docker-compose.yml"
 FRONTEND_PID=""
+UVICORN_BIN=""
+
+find_uvicorn_bin() {
+  local candidate=""
+  for candidate in \
+    "$ROOT_DIR/.venv/bin/uvicorn" \
+    "$BACKEND_DIR/.venv/bin/uvicorn" \
+    "$BACKEND_DIR/venv/bin/uvicorn"
+  do
+    if [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+start_qdrant() {
+  if [ -f "$DOCKER_COMPOSE_FILE" ] && docker compose version >/dev/null 2>&1; then
+    echo "Starting Qdrant with docker compose"
+    docker compose up -d qdrant >/dev/null
+    return 0
+  fi
+
+  if ! docker ps -a --format '{{.Names}}' | grep -Fxq "$QDRANT_CONTAINER_NAME"; then
+    echo "Starting new Qdrant container: $QDRANT_CONTAINER_NAME"
+    docker run -d \
+      --name "$QDRANT_CONTAINER_NAME" \
+      -p "$QDRANT_HTTP_PORT:6333" \
+      -p "$QDRANT_GRPC_PORT:6334" \
+      "$QDRANT_IMAGE" >/dev/null
+  elif ! docker ps --format '{{.Names}}' | grep -Fxq "$QDRANT_CONTAINER_NAME"; then
+    echo "Starting existing Qdrant container: $QDRANT_CONTAINER_NAME"
+    docker start "$QDRANT_CONTAINER_NAME" >/dev/null
+  else
+    echo "Qdrant container is already running: $QDRANT_CONTAINER_NAME"
+  fi
+}
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker is required to run Qdrant." >&2
@@ -22,8 +61,14 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -x "$UVICORN_BIN" ]; then
-  echo "Expected Uvicorn at $UVICORN_BIN but it was not found." >&2
+if [ ! -f "$ENV_FILE" ]; then
+  echo "Missing $ENV_FILE. Copy .env.example to .env and fill in your API keys first." >&2
+  exit 1
+fi
+
+if ! UVICORN_BIN="$(find_uvicorn_bin)"; then
+  echo "Could not find a backend virtualenv with Uvicorn." >&2
+  echo "Create one with: python3 -m venv .venv && ./.venv/bin/pip install -r backend/requirements.txt" >&2
   exit 1
 fi
 
@@ -43,19 +88,7 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-if ! docker ps -a --format '{{.Names}}' | grep -Fxq "$QDRANT_CONTAINER_NAME"; then
-  echo "Starting new Qdrant container: $QDRANT_CONTAINER_NAME"
-  docker run -d \
-    --name "$QDRANT_CONTAINER_NAME" \
-    -p "$QDRANT_HTTP_PORT:6333" \
-    -p "$QDRANT_GRPC_PORT:6334" \
-    "$QDRANT_IMAGE" >/dev/null
-elif ! docker ps --format '{{.Names}}' | grep -Fxq "$QDRANT_CONTAINER_NAME"; then
-  echo "Starting existing Qdrant container: $QDRANT_CONTAINER_NAME"
-  docker start "$QDRANT_CONTAINER_NAME" >/dev/null
-else
-  echo "Qdrant container is already running: $QDRANT_CONTAINER_NAME"
-fi
+start_qdrant
 
 echo "Waiting for Qdrant on http://localhost:$QDRANT_HTTP_PORT/collections ..."
 for _ in $(seq 1 30); do
@@ -72,6 +105,10 @@ fi
 
 echo "Launching frontend with Next.js on http://localhost:3000"
 cd "$FRONTEND_DIR"
+if [ ! -d node_modules ]; then
+  echo "Frontend dependencies are missing. Run 'cd frontend && npm install' first." >&2
+  exit 1
+fi
 npm run dev &
 FRONTEND_PID=$!
 

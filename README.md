@@ -363,16 +363,36 @@ NEXT_PUBLIC_SALINIG_API_KEY=
 
 ## Getting Started
 
-### Backend
+### Quick Start
 
-This repository currently uses the existing virtual environment at `backend/venv`.
+1. Copy the example environment file and fill in your API keys.
 
 ```bash
-cd backend
-../backend/venv/bin/uvicorn app.main:app --reload
+cp .env.example .env
 ```
 
-If you want one shortcut that starts Qdrant, the frontend, and then launches the backend:
+2. Create a Python virtual environment at the repository root and install backend dependencies.
+
+```bash
+python3 -m venv .venv
+./.venv/bin/pip install -r backend/requirements.txt
+```
+
+3. Install frontend dependencies.
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+4. Start Qdrant with Docker Compose.
+
+```bash
+docker compose up -d
+```
+
+5. Start the full local stack with one command.
 
 ```bash
 ./run_backend_stack.sh
@@ -383,23 +403,32 @@ The services will be available at:
 ```text
 Frontend: http://localhost:3000
 Backend API: http://localhost:8000
+Qdrant: http://localhost:6333
 ```
 
-### Frontend
+### Manual Startup
+
+Backend:
+
+```bash
+cd backend
+../.venv/bin/uvicorn app.main:app --reload
+```
+
+Frontend:
 
 ```bash
 cd frontend
-npm install
 npm run dev
 ```
 
-The frontend will be available at:
+Qdrant:
 
-```text
-http://localhost:3000
+```bash
+docker compose up -d
 ```
 
-By default, the frontend proxy expects the backend at `http://localhost:8000/api/v1`. Override this with `SALINIG_API_BASE` if needed.
+By default, the frontend proxy expects the backend at `http://localhost:8000/api/v1`. Override this with `SALINIG_API_BASE` if needed. If you want frontend-only env overrides, add them in `frontend/.env.local`.
 
 ## Testing
 
@@ -407,7 +436,7 @@ Run the backend tests:
 
 ```bash
 cd backend
-../backend/venv/bin/python -m unittest tests/test_cyclic_rag.py
+../.venv/bin/python -m unittest tests/test_cyclic_rag.py
 ```
 
 The test suite patches external I/O, including LLM calls, Tavily search, Qdrant retrieval, Qdrant writes, and RoBERTa inference.
