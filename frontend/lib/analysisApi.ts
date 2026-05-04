@@ -108,6 +108,24 @@ export interface ClaimVerificationSummary {
   contradictions: ContradictionAlert[];
 }
 
+export interface SpikeSignal {
+  signal_type: 'density' | 'velocity' | 'nli_coherence';
+  score: number;
+  weight: number;
+  note: string;
+}
+
+export interface SpikeDetectionResult {
+  detected: boolean;
+  spike_level: 'ACTIVE_SPIKE' | 'RISING_SIGNAL' | 'BASELINE';
+  spike_score: number;
+  signals: SpikeSignal[];
+  history_count: number;
+  recent_note_count: number;
+  velocity_available: boolean;
+  error?: string | null;
+}
+
 export interface AnalysisDiagnostics {
   search_queries: string[];
   collected_sources: Array<{
@@ -135,6 +153,7 @@ export interface AnalysisDiagnostics {
     unsupported_urls: string[];
     unsupported_source_titles: string[];
   };
+  spike_detection?: SpikeDetectionResult | null;
 }
 
 export interface AnalysisResponse {
@@ -153,6 +172,7 @@ export interface AnalysisResponse {
   memory_saved: boolean;
   memory_duplicate: boolean;
   diagnostics?: AnalysisDiagnostics | null;
+  spike_detection?: SpikeDetectionResult | null;
   quality_score: number;
   quality_breakdown: Record<string, number>;
   quality_passed: boolean;

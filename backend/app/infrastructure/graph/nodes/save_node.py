@@ -37,6 +37,9 @@ def save_node(state):
         "source_urls": state.get("source_urls") or [],
         "citations": state.get("learning_citations") or [],
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "sentiment_scores": state.get("sentiment_scores") or {},
+        "spike_level": state.get("spike_level") or "BASELINE",
+        "spike_score": float(state.get("spike_score") or 0.0),
     }
 
     try:

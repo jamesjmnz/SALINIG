@@ -54,3 +54,10 @@ class SalinigState(TypedDict):
     claim_verification: dict[str, Any]
     citation_validation: dict[str, Any]
     cycle_trace: list[dict[str, Any]]
+
+    spike_detection: dict[str, Any]
+    spike_score: float | None
+    spike_level: str | None
+    spike_signals: list[dict[str, Any]]
+    spike_history_count: int | None
+    spike_detection_error: str | None

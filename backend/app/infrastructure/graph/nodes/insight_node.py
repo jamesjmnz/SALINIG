@@ -395,6 +395,40 @@ def _overall_credibility_label(credibility: Any) -> str:
     return "Unverified"
 
 
+_CONTENT_DEDUP_STOP = frozenset(
+    "a an the is are was were in on at to of and or for with by from that this it its be has have had as not but so than more less also very just its each"
+    .split()
+)
+
+
+def _summary_word_set(text: str) -> frozenset[str]:
+    return frozenset(
+        w for w in text.lower().split() if len(w) > 3 and w not in _CONTENT_DEDUP_STOP
+    )
+
+
+def _dedupe_signals_by_content(
+    signals: list[dict[str, Any]], threshold: float = 0.60, min_words: int = 5
+) -> list[dict[str, Any]]:
+    kept: list[dict[str, Any]] = []
+    kept_word_sets: list[frozenset[str]] = []
+    for signal in signals:
+        words = _summary_word_set(signal.get("summary", ""))
+        if len(words) < min_words:
+            kept.append(signal)
+            continue
+        duplicate = False
+        for kept_words in kept_word_sets:
+            union = kept_words | words
+            if union and len(kept_words & words) / len(union) >= threshold:
+                duplicate = True
+                break
+        if not duplicate:
+            kept.append(signal)
+            kept_word_sets.append(words)
+    return kept
+
+
 def _build_source_signals(
     draft: SentimentReportDraft,
     catalog: list[dict[str, Any]],
@@ -464,6 +498,9 @@ def build_sentiment_report(
         source_signals.extend(supplemental_signals)
         credibility_scores.extend(supplemental_scores)
         used_indexes.update(supplemental_indexes)
+
+    source_signals = _dedupe_signals_by_content(source_signals)
+    credibility_scores = [s["credibility_score"] for s in source_signals]
 
     source_sentiment_pcts = _source_signal_sentiment_percentages(source_signals)
     sentiment_pcts = source_sentiment_pcts or _model_sentiment_percentages(state.get("sentiment_scores"))
@@ -575,6 +612,16 @@ def insight_node(state):
 
     logger.info("insight start — place=%s iteration=%d evidence_chars=%d", state["place"], iteration, len(evidence))
 
+    spike_level = (state.get("spike_detection") or {}).get("spike_level", "BASELINE")
+    spike_score = (state.get("spike_detection") or {}).get("spike_score", 0.0)
+    spike_history = (state.get("spike_detection") or {}).get("history_count", 0)
+    spike_section = ""
+    if spike_level in ("ACTIVE_SPIKE", "RISING_SIGNAL"):
+        spike_section = f"""
+
+Topic spike signal: {spike_level} (score {spike_score:.2f}, {spike_history} historical notes)
+Analyst instruction: Acknowledge the elevated monitoring signal in the overview. Include a sustained-monitoring recommendation in actionable_insights."""
+
     user_message = f"""Place: {state["place"]}
 Monitoring window: {state["monitoring_window"]}
 Categories: {themes or "none"}
@@ -603,7 +650,7 @@ Evidence:
 {evidence}
 
 Relevant prior memory:
-{state["memory_context"]}"""
+{state["memory_context"]}{spike_section}"""
 
     try:
         reporter = llm.with_structured_output(SentimentReportDraft)

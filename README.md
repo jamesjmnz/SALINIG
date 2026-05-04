@@ -26,9 +26,10 @@ The graph improves its own output during a run. If the evaluator finds weak grou
 | Node        | Context Engineering Mechanism                                                               | Implementation                                                                                                             |
 | ----------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `query_gen` | Query planning from user intent, place, themes, monitoring window, and prior evaluator gaps | Builds query targets from evaluator `knowledge_gaps`, else `focus_terms`, else categories; generates Tavily-ready queries deterministically by default, with optional LLM query generation via `RAG_USE_LLM_QUERY_GEN` |
-| `research`  | Parallel evidence and memory retrieval                                                      | Runs `collect_node` and `memory_node` concurrently with `ThreadPoolExecutor`                                               |
+| `research`  | Parallel evidence, memory, and trend-signal retrieval                                       | Runs `collect_node`, `memory_node`, and `spike_detection_node` concurrently with `ThreadPoolExecutor`                      |
 | `collect`   | Web evidence acquisition                                                                    | Fans out Tavily queries in parallel, deduplicates by URL, reranks sources with `BAAI/bge-reranker-v2-m3` with heuristic fallback, preserves titles, URLs, published dates, scores, snippets, and optional raw content, then compacts evidence text to per-mode limits |
 | `memory`    | Memory-augmented context recall                                                             | Searches Qdrant with OpenAI embeddings and returns prior learning notes before synthesis                                   |
+| `spike_detection` | Historical trend-pressure scoring                                                    | Searches related memory notes in Qdrant, blends density, temporal drift, and NLI coherence into a spike score, and flags `RISING_SIGNAL` or `ACTIVE_SPIKE` for downstream reporting |
 | `evidence_gate` | Minimum evidence sufficiency guard                                                      | Checks ranked-source count, unique-domain count, and official-source count before synthesis; returns an early insufficient-evidence result when thresholds are not met |
 | `analysis`  | Compact auxiliary intelligence                                                              | Runs a combined LLM sentiment and credibility assessment, then blends sentiment with RoBERTa scores from `cardiffnlp/twitter-roberta-base-sentiment-latest` |
 | `insight`   | Structured sentiment-report synthesis                                                       | Generates an overall sentiment brief, then parallel source-level signals for every collected source, credibility-weighted metrics, and actionable insights |
@@ -51,10 +52,10 @@ The compiled graph in `backend/app/infrastructure/graph/graph_builder.py` contai
 query_gen, research, evidence_gate, analysis, insight, claim_verification, citation_validation, evaluate, learn, save, complete, finalize, insufficient_evidence
 ```
 
-Two additional worker nodes run inside `research`:
+Three additional worker nodes run inside `research`:
 
 ```text
-collect_node + memory_node
+collect_node + memory_node + spike_detection_node
 ```
 
 The older standalone `sentiment_node` and `credibility_node` remain available as a parallel fallback if combined analysis fails.
@@ -145,12 +146,22 @@ The memory loop is:
 memory_node retrieves prior learning -> insight_node uses memory -> learning_node distills accepted report -> save_node writes back to Qdrant
 ```
 
+## Predictive ML
+
+SALINIG also exposes an offline-training and forecasting layer under `backend/ml/` and `/api/v1/predict`.
+
+- Sentiment trend models train per-label regressors (`negative`, `neutral`, `positive`) from Qdrant-derived time series and persist them to `backend/ml/models/`
+- Topic trend models train one regressor per extracted topic and fall back to a naive mean forecast when no trained artifact exists yet
+- Sentiment prediction auto-trains the requested window if no saved model is present, then returns current value, predicted next value, delta, and anomaly alerts
+- Both sentiment and topic flows can operate on synthetic fallback datasets when real history is insufficient, and responses explicitly flag `is_synthetic`
+- Composite risk scoring combines negative sentiment, topic-spike intensity, low credibility, and misinformation risk into a bounded `LOW` to `CRITICAL` score
+
 ## API
 
-Backend base path:
+Backend API base path:
 
 ```text
-/api/v1/analysis
+/api/v1
 ```
 
 Implemented analysis endpoints:
@@ -167,6 +178,15 @@ Implemented analysis endpoints:
 | `POST` | `/api/v1/analysis/feedback`        | Store analyst review labels, notes, and flagged claim IDs              |
 | `GET`  | `/api/v1/analysis/feedback`        | List stored analyst feedback records                                    |
 | `GET`  | `/api/v1/analysis/feedback/export` | Export analyst feedback plus fine-tuning-readiness summary              |
+
+Implemented predictive endpoints:
+
+| Method | Path                          | Purpose                                                                 |
+| ------ | ----------------------------- | ----------------------------------------------------------------------- |
+| `POST` | `/api/v1/predict/train`       | Train sentiment-trend and topic-trend models from Qdrant-backed history |
+| `POST` | `/api/v1/predict/sent-trend`  | Predict next sentiment values and emit spike/drop alerts                |
+| `POST` | `/api/v1/predict/topic-spike` | Forecast topic-frequency changes and flag topic spikes                  |
+| `POST` | `/api/v1/predict/risk-score`  | Compute a composite risk score from sentiment, spike, and credibility inputs |
 
 Additional service endpoints:
 
@@ -207,6 +227,7 @@ Response highlights:
 - `sentiment_report`: structured report object for the frontend
 - `analysis_status`: `completed` or `insufficient_evidence`
 - `quality`: canonical quality object with score, breakdown, pass/fail, feedback, knowledge gaps, and blocking issues
+- `spike_detection`: top-level trend-pressure summary with `BASELINE`, `RISING_SIGNAL`, or `ACTIVE_SPIKE`
 - `memory_saved` and `memory_duplicate`: Qdrant writeback status
 - transitional fields such as `quality_score` and `quality_breakdown` are still returned for existing callers
 
@@ -224,10 +245,18 @@ Analyst feedback behavior:
 - each record can include `report_id`, 1-5 score, usefulness/accuracy labels, optional notes, flagged claim IDs, and free-form tags
 - the export endpoint returns a readiness summary based on feedback volume, positive useful examples, inaccurate examples, average score, and the most frequently flagged claim IDs
 
+Predictive endpoint behavior:
+
+- `POST /api/v1/predict/train` can partially succeed; it returns separate sentiment/topic metrics plus a combined status message instead of failing the whole request when only one training branch errors
+- `POST /api/v1/predict/sent-trend` auto-trains the requested sentiment window when the model file is missing, then returns per-label `current`, `predicted`, `change`, `mae`, `rmse`, `model`, `alerts`, and `top_alert`
+- `POST /api/v1/predict/topic-spike` returns ranked topic forecasts with `current`, `predicted`, `ratio`, `alert`, `model`, and `is_synthetic`; a topic is marked as a spike when `predicted/current >= spike_threshold`
+- `POST /api/v1/predict/risk-score` applies a fixed weighted formula: negative sentiment `0.35`, topic spike `0.30`, low credibility `0.25`, and misinformation risk `0.10`, with a small compound boost when both sentiment and topic alerts fire
+
 Security and runtime protections:
 
 - If `SALINIG_API_KEY` is set, requests must include `X-API-Key`
 - Analysis endpoints apply an in-memory per-client or per-key rate limit
+- The current API-key and rate-limit dependencies are attached to `/analysis` routes; `/predict` routes are currently mounted without those dependencies
 - Saved-report storage strips bulky diagnostic content before persistence so archived records stay presentation-friendly
 - Evidence sufficiency gating can stop a run before synthesis when minimum source/domain thresholds are not met
 - Citation validation runs before evaluation; unsupported citations reduce quality and create actionable blocking issues
@@ -261,6 +290,7 @@ Current frontend behavior:
 - `Verify` renders evidence-sufficiency results, claim-to-evidence mappings, contradiction alerts, and an analyst feedback form backed by `/api/analysis/feedback`
 - `Verify` also loads feedback export statistics so reviewers can monitor feedback-dataset health for future fine-tuning experiments
 - `Signals`, `Verify`, and the live portions of `Dashboard` render backend `sentiment_report` data when available
+- `Sentiment` surfaces `spike_detection` status as a banner when the backend returns `RISING_SIGNAL` or `ACTIVE_SPIKE`
 - `Dashboard` still includes demo-only credibility trend and agent-status cards when no dedicated backend feed exists
 - `Settings` is currently a presentational/local-state console surface rather than a persisted backend configuration panel
 
@@ -331,7 +361,7 @@ RAG_ENABLE_ROBERTA=true
 RAG_WARM_ROBERTA_ON_STARTUP=false
 RAG_ENABLE_RERANKING=true
 RAG_RERANKER_MODEL=BAAI/bge-reranker-v2-m3
-RAG_RERANK_TOP_K=8
+RAG_RERANK_TOP_K=15
 RAG_ENABLE_EVIDENCE_SUFFICIENCY_GATE=true
 RAG_MIN_SOURCES_REQUIRED=2
 RAG_MIN_UNIQUE_DOMAINS_REQUIRED=2
@@ -340,6 +370,12 @@ RAG_ENABLE_NLI_VERIFICATION=true
 RAG_NLI_MODEL=MoritzLaurer/mDeBERTa-v3-base-mnli-xnli
 RAG_MAX_CLAIMS_TO_VERIFY=8
 RAG_MAX_SOURCES_PER_CLAIM=3
+RAG_ENABLE_SPIKE_DETECTION=true
+RAG_SPIKE_HISTORY_K=20
+RAG_SPIKE_RECENCY_DAYS=7
+RAG_SPIKE_ACTIVE_THRESHOLD=0.70
+RAG_SPIKE_RISING_THRESHOLD=0.45
+RAG_SPIKE_NLI_MAX_NOTES=5
 EXTERNAL_REQUEST_TIMEOUT_SECONDS=30
 EXTERNAL_MAX_RETRIES=2
 SALINIG_API_KEY=
@@ -436,7 +472,7 @@ Run the backend tests:
 
 ```bash
 cd backend
-../.venv/bin/python -m unittest tests/test_cyclic_rag.py
+../.venv/bin/python -m unittest tests/test_cyclic_rag.py tests/test_spike_detection.py
 ```
 
 The test suite patches external I/O, including LLM calls, Tavily search, Qdrant retrieval, Qdrant writes, and RoBERTa inference.
@@ -452,6 +488,7 @@ Coverage includes:
 - citation validation penalties
 - query-budget controls and fast-draft/full mode behavior
 - sentiment-report rendering and source-signal metrics
+- spike-detection scoring, thresholds, disablement, and trace behavior
 
 Run the frontend linter:
 
@@ -467,17 +504,21 @@ npm run lint
 | FastAPI app             | `backend/app/main.py`                                |
 | API router              | `backend/app/api/v1/router.py`                       |
 | Analysis endpoint       | `backend/app/api/v1/endpoints/analysis.py`           |
+| Predictive endpoints    | `backend/app/api/v1/endpoints/predict.py`            |
 | Analysis service        | `backend/app/domain/services/analysis_service.py`    |
 | Request/response schema | `backend/app/schemas/analysis_schema.py`             |
+| Predictive schemas      | `backend/app/schemas/predict_schema.py`              |
 | Input defaults          | `backend/app/domain/analysis_defaults.py`            |
 | Security and rate limit | `backend/app/core/security.py`, `backend/app/core/rate_limit.py` |
 | Saved-report cache/archive | `backend/app/domain/services/analysis_cache.py`   |
 | Analyst feedback store  | `backend/app/domain/services/analysis_feedback.py`   |
 | Graph builder           | `backend/app/infrastructure/graph/graph_builder.py`  |
 | Graph state             | `backend/app/infrastructure/graph/state.py`          |
+| Parallel research stage | `backend/app/infrastructure/graph/nodes/research_node.py` |
 | Evidence gate           | `backend/app/infrastructure/graph/nodes/evidence_gate_node.py` |
 | Claim verification      | `backend/app/infrastructure/graph/nodes/claim_verification_node.py` |
 | Citation validation     | `backend/app/infrastructure/graph/nodes/citation_validation_node.py` |
+| Spike detection         | `backend/app/infrastructure/graph/nodes/spike_detection_node.py` |
 | Tavily search           | `backend/app/infrastructure/search/tavily_search.py` |
 | Source reranking        | `backend/app/infrastructure/rerank/hf_reranker.py`   |
 | NLI verification        | `backend/app/infrastructure/verification/hf_nli.py`  |
@@ -496,7 +537,7 @@ npm run lint
 ## Current Implementation Snapshot
 
 - 13-node LangGraph cyclic RAG pipeline with early insufficient-evidence termination
-- Parallel research stage for Tavily collection and Qdrant memory retrieval
+- Parallel research stage for Tavily collection, Qdrant memory retrieval, and spike detection
 - Ranked-source reranking before synthesis and evidence gating
 - Parallel source-signal generation for each collected source
 - Quality-gated retry loop with actionable knowledge gaps
@@ -504,12 +545,14 @@ npm run lint
 - Self-learning memory writeback for passing reports
 - RoBERTa + LLM sentiment ensemble with fallback behavior
 - Multi-dimensional credibility brief
+- Historical spike detection based on memory density, temporal drift, and NLI coherence
 - Claim-to-evidence verification with NLI and heuristic fallback
 - Citation validation before quality scoring
 - Structured sentiment report with source-level signals, weighted metrics, and actionable insights
 - Streaming analysis progress over SSE
 - File-backed saved-report archive plus latest-report bootstrap for the frontend
 - File-backed analyst feedback capture and fine-tuning-readiness summary export
+- Predictive ML endpoints for offline training, sentiment forecasting, topic-spike forecasting, and composite risk scoring
 - Philippines-first location and category normalization
 - `cycle_trace` observability returned in API responses
 - Next.js proxy-backed console frontend for monitoring and presentation

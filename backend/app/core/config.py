@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     RAG_SIGNAL_MAX_WORKERS: int = 4
     RAG_ENABLE_RERANKING: bool = True
     RAG_RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
-    RAG_RERANK_TOP_K: int = 8
+    RAG_RERANK_TOP_K: int = 15
     RAG_ENABLE_EVIDENCE_SUFFICIENCY_GATE: bool = True
     RAG_MIN_SOURCES_REQUIRED: int = 2
     RAG_MIN_UNIQUE_DOMAINS_REQUIRED: int = 2
@@ -42,6 +42,13 @@ class Settings(BaseSettings):
     RAG_NLI_MODEL: str = "MoritzLaurer/mDeBERTa-v3-base-mnli-xnli"
     RAG_MAX_CLAIMS_TO_VERIFY: int = 8
     RAG_MAX_SOURCES_PER_CLAIM: int = 3
+
+    RAG_ENABLE_SPIKE_DETECTION: bool = True
+    RAG_SPIKE_HISTORY_K: int = 20
+    RAG_SPIKE_RECENCY_DAYS: int = 7
+    RAG_SPIKE_ACTIVE_THRESHOLD: float = 0.70
+    RAG_SPIKE_RISING_THRESHOLD: float = 0.45
+    RAG_SPIKE_NLI_MAX_NOTES: int = 5
 
     OPENAI_EMBEDDING_DIMENSIONS: int = 1536
     EXTERNAL_REQUEST_TIMEOUT_SECONDS: float = 30.0
