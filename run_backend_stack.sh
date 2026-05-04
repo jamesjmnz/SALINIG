@@ -30,25 +30,28 @@ find_uvicorn_bin() {
 }
 
 start_qdrant() {
+  if docker ps -a --format '{{.Names}}' | grep -Fxq "$QDRANT_CONTAINER_NAME"; then
+    if docker ps --format '{{.Names}}' | grep -Fxq "$QDRANT_CONTAINER_NAME"; then
+      echo "Qdrant container is already running: $QDRANT_CONTAINER_NAME"
+    else
+      echo "Starting existing Qdrant container: $QDRANT_CONTAINER_NAME"
+      docker start "$QDRANT_CONTAINER_NAME" >/dev/null
+    fi
+    return 0
+  fi
+
   if [ -f "$DOCKER_COMPOSE_FILE" ] && docker compose version >/dev/null 2>&1; then
     echo "Starting Qdrant with docker compose"
     docker compose up -d qdrant >/dev/null
     return 0
   fi
 
-  if ! docker ps -a --format '{{.Names}}' | grep -Fxq "$QDRANT_CONTAINER_NAME"; then
-    echo "Starting new Qdrant container: $QDRANT_CONTAINER_NAME"
-    docker run -d \
-      --name "$QDRANT_CONTAINER_NAME" \
-      -p "$QDRANT_HTTP_PORT:6333" \
-      -p "$QDRANT_GRPC_PORT:6334" \
-      "$QDRANT_IMAGE" >/dev/null
-  elif ! docker ps --format '{{.Names}}' | grep -Fxq "$QDRANT_CONTAINER_NAME"; then
-    echo "Starting existing Qdrant container: $QDRANT_CONTAINER_NAME"
-    docker start "$QDRANT_CONTAINER_NAME" >/dev/null
-  else
-    echo "Qdrant container is already running: $QDRANT_CONTAINER_NAME"
-  fi
+  echo "Starting new Qdrant container: $QDRANT_CONTAINER_NAME"
+  docker run -d \
+    --name "$QDRANT_CONTAINER_NAME" \
+    -p "$QDRANT_HTTP_PORT:6333" \
+    -p "$QDRANT_GRPC_PORT:6334" \
+    "$QDRANT_IMAGE" >/dev/null
 }
 
 if ! command -v docker >/dev/null 2>&1; then
