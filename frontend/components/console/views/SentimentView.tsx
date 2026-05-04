@@ -9,6 +9,7 @@ import type {
   AnalysisStatus,
   AnalyzePayload,
   MonitoringWindow,
+  SpikeDetectionResult,
 } from '@/lib/analysisApi';
 
 interface SentimentViewProps {
@@ -71,6 +72,40 @@ function progressPercent(progress: AnalysisProgressEvent | null) {
   return stages[progress.node ?? ''] ?? 10;
 }
 
+function SpikeBanner({ spike }: { spike: SpikeDetectionResult }) {
+  const isActive = spike.spike_level === 'ACTIVE_SPIKE';
+  const color = isActive ? 'var(--rust)' : '#d97706';
+  const bg = isActive ? 'rgba(196,69,69,0.07)' : 'rgba(217,119,6,0.07)';
+  const label = isActive ? 'ACTIVE SPIKE' : 'RISING SIGNAL';
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '9px 16px', marginBottom: 12,
+      background: bg, border: `1px solid ${color}`,
+      borderRadius: 8, fontSize: 12,
+    }}>
+      <span style={{
+        padding: '2px 7px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+        background: color, color: '#fff', letterSpacing: '0.05em',
+        fontFamily: 'var(--font-dm-mono), monospace',
+      }}>{label}</span>
+      <span style={{ color: 'var(--fg)', fontWeight: 600 }}>
+        Score {Math.round(spike.spike_score * 100)}
+      </span>
+      <span style={{ color: 'var(--muted)' }}>·</span>
+      <span style={{ color: 'var(--muted)' }}>{spike.history_count} historical notes</span>
+      <span style={{ color: 'var(--muted)' }}>·</span>
+      <span style={{ color: 'var(--muted)' }}>{spike.recent_note_count} recent</span>
+      {!spike.velocity_available && (
+        <>
+          <span style={{ color: 'var(--muted)' }}>·</span>
+          <span style={{ color: 'var(--muted)', fontStyle: 'italic' }}>velocity signal pending data</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function SentimentView(props: SentimentViewProps) {
   const options = props.options;
   const optionsKey = options
@@ -130,6 +165,8 @@ function SentimentViewContent({
   const diagnostics = analysis?.diagnostics;
   const evidenceSufficiency = diagnostics?.evidence_sufficiency;
   const claimVerification = diagnostics?.claim_verification;
+  const spike = analysis?.spike_detection ?? diagnostics?.spike_detection ?? null;
+  const showSpike = spike && spike.spike_level !== 'BASELINE';
   const selectedThemeNames = useMemo(
     () => (analysis?.prioritize_themes?.length ? analysis.prioritize_themes : selectedCategories),
     [analysis?.prioritize_themes, selectedCategories],
@@ -181,6 +218,7 @@ function SentimentViewContent({
 
   return (
     <div className="fade-in">
+      {showSpike && spike ? <SpikeBanner spike={spike} /> : null}
       <div className="stats-row" style={{gridTemplateColumns:'repeat(3,1fr)', marginBottom:16}}>
         {[
           {label:'Overall sentiment', val:report?.overall_label ?? 'No report', cls:'green'},
@@ -373,48 +411,33 @@ function SentimentViewContent({
         </div>
       )}
 
-      {analysis && report && (
-        <div className="dash-grid" style={{marginTop:16}}>
-          <div className="panel">
-            <div className="panel-head">
-              <span className="panel-title">Source-Level Signals</span>
-              <span className="panel-action">{report.source_signals.length} signals</span>
-            </div>
-            {report.source_signals.map((signal, index) => (
-              <div className="signal-item" key={`${signal.source}-${index}`} style={{padding:'16px 20px'}}>
-                <div className={`signal-dot ${signal.verification === 'unverified' ? 'high' : signal.sentiment === 'Negative' ? 'medium' : 'low'}`}></div>
-                <div className="signal-content">
-                  <div className="signal-text" style={{whiteSpace:'normal', fontSize:14}}>{signal.summary}</div>
-                  <div className="signal-meta" style={{marginTop:6}}>
-                    {signal.url
-                      ? <a className="source-link" href={signal.url} target="_blank" rel="noreferrer">{signal.source}</a>
-                      : <span className="signal-source">{signal.source}</span>
-                    }
-                    <span className="signal-time">S{signal.source_index}</span>
-                    <span className="signal-time">{signal.sentiment}</span>
-                    <span className="signal-time">{signal.credibility ?? 'Unverified'} · {signal.credibility_score ?? 0}/100</span>
-                    <span className={`report-badge ${signal.verification === 'verified' ? 'verified' : 'flagged'}`}>{signal.verification}</span>
-                  </div>
+      {analysis && report && report.source_signals.length ? (
+        <div className="panel" style={{ marginTop: 16 }}>
+          <div className="panel-head">
+            <span className="panel-title">Source-Level Signals</span>
+            <span className="panel-action">{report.source_signals.length} signals</span>
+          </div>
+          {report.source_signals.map((signal, index) => (
+            <div className="signal-item" key={`${signal.source}-${index}`} style={{ padding: '14px 20px' }}>
+              <div className={`signal-dot ${signal.verification === 'unverified' ? 'high' : signal.sentiment === 'Negative' ? 'medium' : 'low'}`}></div>
+              <div className="signal-content">
+                <div className="signal-text" style={{ whiteSpace: 'normal', fontSize: 13 }}>{signal.summary}</div>
+                <div className="signal-meta" style={{ marginTop: 5 }}>
+                  {signal.url
+                    ? <a className="source-link" href={signal.url} target="_blank" rel="noreferrer">{signal.source}</a>
+                    : <span className="signal-source">{signal.source}</span>
+                  }
+                  <span className="signal-time">S{signal.source_index}</span>
+                  <span className="signal-time">{signal.sentiment}</span>
+                  <span className="signal-time">{signal.credibility ?? 'Unverified'} · {signal.credibility_score ?? 0}/100</span>
+                  <span className={`report-badge ${signal.verification === 'verified' ? 'verified' : 'flagged'}`}>{signal.verification}</span>
                 </div>
               </div>
-            ))}
-          </div>
-          <div className="panel">
-            <div className="panel-head">
-              <span className="panel-title">Quality Gate</span>
-              <span className={`report-badge ${analysis.quality.passed ? 'verified' : 'pending'}`}>
-                {Math.round(analysis.quality.score * 100)}
-              </span>
             </div>
-            <div className="analysis-report-body">
-              <div className="analysis-overview">{report.overview}</div>
-              {report.actionable_insights.map((insight, index) => (
-                <div className="analysis-insight" key={index}>{insight}</div>
-              ))}
-            </div>
-          </div>
+          ))}
         </div>
-      )}
+      ) : null}
+
     </div>
   );
 }
