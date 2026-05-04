@@ -1,5 +1,6 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlsplit, urlunsplit
 
 from app.core.config import settings
 from app.infrastructure.graph.trace import append_trace
@@ -38,15 +39,48 @@ def _truncate(value, max_chars):
     return text[: max_chars - 3].rstrip() + "..."
 
 
+def _canonical_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    try:
+        parts = urlsplit(url.strip())
+        return urlunsplit((
+            parts.scheme.lower(),
+            parts.netloc.lower(),
+            parts.path.rstrip("/") or "/",
+            parts.query,
+            "",
+        ))
+    except Exception:
+        return url
+
+
 def _dedupe_sources(items):
     seen = set()
     deduped = []
     for item in items:
-        url = _get_url(item)
-        key = url or str(item)
+        raw_url = _get_url(item)
+        key = _canonical_url(raw_url) or _clean_text(item.get("title") or "") or str(id(item))
         if key in seen:
             continue
         seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def _dedupe_by_domain(items):
+    seen_domains = set()
+    deduped = []
+    for item in items:
+        url = _get_url(item)
+        try:
+            domain = urlsplit((url or "").strip()).netloc.lower() if url else None
+        except Exception:
+            domain = None
+        if domain:
+            if domain in seen_domains:
+                continue
+            seen_domains.add(domain)
         deduped.append(item)
     return deduped
 
@@ -130,7 +164,7 @@ def collect_node(state):
         all_items,
         top_k=int(runtime_options.get("rerank_top_k", settings.RAG_RERANK_TOP_K)),
     )
-    ranked_items = list(ranked_sources)
+    ranked_items = _dedupe_by_domain(list(ranked_sources))
     text = _truncate(
         "\n\n".join([_format_source(item, source_char_limit) for item in ranked_items]),
         evidence_char_limit,
