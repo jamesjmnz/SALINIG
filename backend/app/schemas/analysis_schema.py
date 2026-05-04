@@ -197,6 +197,24 @@ class ClaimVerificationSummary(BaseModel):
     contradictions: list[ContradictionAlert] = Field(default_factory=list)
 
 
+class SpikeSignal(BaseModel):
+    signal_type: str
+    score: float = Field(0.0, ge=0.0, le=1.0)
+    weight: float = Field(0.0, ge=0.0, le=1.0)
+    note: str = ""
+
+
+class SpikeDetectionResult(BaseModel):
+    detected: bool = False
+    spike_level: str = "BASELINE"
+    spike_score: float = Field(0.0, ge=0.0, le=1.0)
+    signals: list[SpikeSignal] = Field(default_factory=list)
+    history_count: int = Field(0, ge=0)
+    recent_note_count: int = Field(0, ge=0)
+    velocity_available: bool = False
+    error: str | None = None
+
+
 class AnalysisDiagnostics(BaseModel):
     search_queries: list[str] = Field(default_factory=list)
     collected_sources: list[EvidenceSource] = Field(default_factory=list)
@@ -209,6 +227,7 @@ class AnalysisDiagnostics(BaseModel):
     evidence_sufficiency: EvidenceSufficiencyResult = Field(default_factory=EvidenceSufficiencyResult)
     claim_verification: ClaimVerificationSummary = Field(default_factory=ClaimVerificationSummary)
     citation_validation: CitationValidationResult = Field(default_factory=CitationValidationResult)
+    spike_detection: SpikeDetectionResult | None = None
 
 
 class AnalysisResponse(BaseModel):
@@ -229,6 +248,8 @@ class AnalysisResponse(BaseModel):
     memory_saved: bool = False
     memory_duplicate: bool = False
     diagnostics: AnalysisDiagnostics | None = None
+
+    spike_detection: SpikeDetectionResult | None = None
 
     # Transitional fields for existing callers. New clients should read `quality`.
     quality_score: float = Field(0.0, ge=0.0, le=1.0)
