@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  fetchAnalystFeedbackExport,
   submitAnalystFeedback,
   type AnalysisResponse,
   type ClaimEvidenceLink,
@@ -123,7 +122,6 @@ export default function VerifyView({ analysis, savedReportId }: VerifyViewProps)
   const rows = verificationRows(analysis);
   const hasAnalysis = Boolean(analysis);
   const hasVerification = Boolean(claimVerification?.checked);
-  const metrics = analysis?.sentiment_report?.metrics;
   const blockingIssues = analysis?.quality?.blocking_issues?.length
     ? analysis.quality.blocking_issues
     : analysis?.blocking_issues ?? [];
@@ -137,31 +135,6 @@ export default function VerifyView({ analysis, savedReportId }: VerifyViewProps)
   const [notes, setNotes] = useState('');
   const [feedbackStatus, setFeedbackStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
-  const [feedbackSummary, setFeedbackSummary] = useState<{
-    total_feedback: number;
-    useful_positive_count: number;
-    inaccurate_count: number;
-    average_score: number;
-    ready_for_fine_tuning: boolean;
-    recommendation: string;
-    most_flagged_claim_ids: string[];
-  } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadFeedbackSummary() {
-      try {
-        const exported = await fetchAnalystFeedbackExport();
-        if (!cancelled) setFeedbackSummary(exported.summary);
-      } catch {
-        if (!cancelled) setFeedbackSummary(null);
-      }
-    }
-
-    loadFeedbackSummary();
-    return () => { cancelled = true; };
-  }, []);
 
   const reviewQueue = rows.filter(row => row.supportStatus === 'contradicted' || row.supportStatus === 'unsupported').length;
   const workspaceDescription = !hasAnalysis
@@ -219,8 +192,6 @@ export default function VerifyView({ analysis, savedReportId }: VerifyViewProps)
           accurate ? 'accurate' : 'inaccurate',
         ],
       });
-      const exported = await fetchAnalystFeedbackExport();
-      setFeedbackSummary(exported.summary);
       setFeedbackStatus('saved');
       setFeedbackMessage('Analyst feedback saved for future evaluation and fine-tuning readiness tracking.');
     } catch (error) {
@@ -234,7 +205,7 @@ export default function VerifyView({ analysis, savedReportId }: VerifyViewProps)
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gridTemplateColumns: 'repeat(3, 1fr)',
           gap: 12,
           marginBottom: 16,
         }}
@@ -243,12 +214,11 @@ export default function VerifyView({ analysis, savedReportId }: VerifyViewProps)
           { label: 'Claims checked', value: compactNumber(claimVerification?.claims.length ?? 0), hint: 'mapped report assertions' },
           { label: 'Need review', value: compactNumber(reviewQueue), hint: 'unsupported or contradicted' },
           { label: 'Contradictions', value: compactNumber(contradictions.length), hint: 'highest-risk findings' },
-          { label: 'Evidence status', value: evidenceSufficiency?.passed ? 'pass' : hasAnalysis ? 'hold' : 'idle', hint: evidenceSufficiency?.checked ? `${evidenceSufficiency.source_count} ranked sources` : 'waiting for run' },
         ].map(card => (
-          <div className="panel" key={card.label} style={{ padding: '16px 18px' }}>
+          <div className="panel" key={card.label} style={{ padding: '14px 16px' }}>
             <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)' }}>{card.label}</div>
-            <div style={{ fontSize: 28, marginTop: 8, fontFamily: 'var(--font-instrument-serif), serif', color: 'var(--text)' }}>{card.value}</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>{card.hint}</div>
+            <div style={{ fontSize: 26, marginTop: 6, fontFamily: 'var(--font-instrument-serif), serif', color: 'var(--text)' }}>{card.value}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{card.hint}</div>
           </div>
         ))}
       </div>
@@ -552,60 +522,6 @@ export default function VerifyView({ analysis, savedReportId }: VerifyViewProps)
             </div>
           </section>
 
-          <section className="panel" style={{ paddingBottom: 10 }}>
-            <div className="panel-head">
-              <span className="panel-title">Fine-Tuning Readiness</span>
-              <span className="panel-action">feedback dataset health</span>
-            </div>
-            <div style={{ padding: '0 20px 18px', display: 'grid', gap: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)' }}>Total feedback</span>
-                <strong>{feedbackSummary?.total_feedback ?? 0}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)' }}>Average score</span>
-                <strong>{feedbackSummary?.average_score ?? 0}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)' }}>Inaccurate labels</span>
-                <strong>{feedbackSummary?.inaccurate_count ?? 0}</strong>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-                {feedbackSummary?.recommendation ?? 'Feedback export summary will appear here once the backend responds.'}
-              </div>
-              {feedbackSummary?.most_flagged_claim_ids?.length ? (
-                <div className="report-note-list">
-                  {feedbackSummary.most_flagged_claim_ids.map(claimId => (
-                    <div className="report-note-item" key={claimId}>{claimId}</div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </section>
-
-          <section className="panel" style={{ paddingBottom: 10 }}>
-            <div className="panel-head">
-              <span className="panel-title">Coverage Snapshot</span>
-              <span className="panel-action">run-level verification</span>
-            </div>
-            <div style={{ padding: '0 20px 18px', display: 'grid', gap: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)' }}>Verified evidence rate</span>
-                <strong>{metrics?.verified_pct ?? 0}%</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)' }}>Credibility average</span>
-                <strong>{metrics?.credibility_pct ?? 0}%</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)' }}>Misinformation risk</span>
-                <strong>{metrics?.misinfo_risk_pct ?? 0}%</strong>
-              </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
-                Useful ito kapag gusto mong makita kung isolated claims lang ba ang problema o mababa talaga ang grounding quality ng buong run.
-              </div>
-            </div>
-          </section>
         </div>
       </div>
     </div>

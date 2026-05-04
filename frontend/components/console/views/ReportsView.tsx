@@ -25,25 +25,6 @@ function formatBreakdownLabel(value: string) {
     .join(' ');
 }
 
-function classifyInsightTone(value: string, index: number) {
-  const normalized = value.toLowerCase();
-  if (normalized.includes('urgent') || normalized.includes('immediately') || normalized.includes('escalat')) {
-    return 'urgent';
-  }
-  if (normalized.includes('monitor') || normalized.includes('track') || normalized.includes('watch')) {
-    return 'watch';
-  }
-  if (normalized.includes('expand') || normalized.includes('opportunity') || normalized.includes('partner')) {
-    return 'opportunity';
-  }
-  return index === 0 ? 'urgent' : index === 1 ? 'watch' : 'opportunity';
-}
-
-function qualityTone(score: number) {
-  if (score >= 85) return 'strong';
-  if (score >= 65) return 'watch';
-  return 'weak';
-}
 
 interface ReportsViewProps {
   analysis: AnalysisResponse | null;
@@ -183,7 +164,7 @@ export default function ReportsView({ analysis, latestUpdatedAt, focusedReportId
               <p>The selected report is being loaded from the archive.</p>
             </div>
           ) : selectedDetail && selectedSummary ? (
-            <SavedReportDetail report={selectedDetail} summary={selectedSummary} />
+            <SavedReportDetail report={selectedDetail} />
           ) : (
             <div className="report-empty-state">
               <span className="report-empty-kicker">Saved Reports</span>
@@ -199,10 +180,9 @@ export default function ReportsView({ analysis, latestUpdatedAt, focusedReportId
 
 interface SavedReportDetailProps {
   report: SavedAnalysisRecord;
-  summary: SavedAnalysisSummary;
 }
 
-function SavedReportDetail({ report, summary }: SavedReportDetailProps) {
+function SavedReportDetail({ report }: SavedReportDetailProps) {
   const analysis = report.analysis;
   const latestScore = Math.round((analysis.quality?.score ?? analysis.quality_score ?? 0) * 100);
   const sentimentReport = analysis.sentiment_report;
@@ -217,369 +197,198 @@ function SavedReportDetail({ report, summary }: SavedReportDetailProps) {
   const blockingIssues = analysis.quality?.blocking_issues?.length
     ? analysis.quality.blocking_issues
     : analysis.blocking_issues;
-  const scoreState = qualityTone(latestScore);
   const sentimentRows = [
-    { label: 'Positive', value: metrics?.positive_pct ?? 0, tone: 'positive' },
-    { label: 'Neutral', value: metrics?.neutral_pct ?? 0, tone: 'neutral' },
-    { label: 'Negative', value: metrics?.negative_pct ?? 0, tone: 'negative' },
+    { label: 'Pos', value: metrics?.positive_pct ?? 0, tone: 'positive' },
+    { label: 'Neu', value: metrics?.neutral_pct ?? 0, tone: 'neutral' },
+    { label: 'Neg', value: metrics?.negative_pct ?? 0, tone: 'negative' },
   ];
 
   return (
     <div className="saved-report-detail-inner">
-      <section className="panel report-spotlight-panel">
-        <div className="report-spotlight">
-          <div className="report-spotlight-main">
-            <div className="report-spotlight-kicker">
-              <span>{analysis.place}</span>
-              <span>{analysis.monitoring_window}</span>
-              <span>{formatUpdatedAt(report.saved_at)}</span>
+
+      {/* Compact header */}
+      <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span className={`report-status-pill ${analysis.quality.passed ? 'verified' : 'pending'}`}>
+                {analysis.quality.passed ? 'saved' : 'review'}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                {analysis.place} · {analysis.monitoring_window} · {formatUpdatedAt(report.saved_at)}
+              </span>
             </div>
-            <h1>{sentimentReport?.overall_label ?? 'Saved Intelligence Report'}</h1>
-            <p className="report-spotlight-summary">
+            <h2 style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.3, color: 'var(--text)', margin: 0 }}>
+              {sentimentReport?.overall_label ?? 'Saved Intelligence Report'}
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5 }}>
               {sentimentReport?.overview || 'This saved report is available for review below.'}
             </p>
-
-            <div className="report-spotlight-grid">
-              <div className="report-story-card">
-                <span className="report-section-label">Priority themes</span>
-                <div className="report-chip-row">
-                  {analysis.prioritize_themes.map(theme => (
-                    <span className="category-chip active" key={theme}>{theme}</span>
-                  ))}
-                </div>
-              </div>
-
-              <div className="report-story-card">
-                <span className="report-section-label">Saved context</span>
-                <p className="report-story-note">
-                  {summary.title} was saved to your archive and can be reopened here any time.
-                </p>
-                <p className="report-story-note" style={{ marginTop: 10 }}>
-                  Run status: <strong>{analysis.analysis_status.replace('_', ' ')}</strong>
-                </p>
-              </div>
+            <div className="report-chip-row" style={{ marginTop: 10 }}>
+              {analysis.prioritize_themes.map(theme => (
+                <span className="category-chip active" key={theme}>{theme}</span>
+              ))}
             </div>
           </div>
-
-          <aside className="report-spotlight-rail">
-            <div className={`report-score-card ${scoreState}`}>
-              <div className="report-score-topline">
-                <span className={`report-status-pill ${analysis.quality.passed ? 'verified' : 'pending'}`}>
-                  {analysis.quality.passed ? 'saved run' : 'needs review'}
-                </span>
-                <span className="report-score-caption">quality score</span>
-              </div>
-              <div className="report-score-value">{latestScore}</div>
-              <p>{analysis.quality.feedback || analysis.quality_feedback}</p>
-            </div>
-
-            <div className="report-quickfacts-card">
-              <div className="report-quickfact">
-                <span>Saved at</span>
-                <strong>{formatUpdatedAt(report.saved_at)}</strong>
-              </div>
-              <div className="report-quickfact">
-                <span>Signals reviewed</span>
-                <strong>{metrics?.signal_count ?? 0}</strong>
-              </div>
-              <div className="report-quickfact">
-                <span>Verified evidence</span>
-                <strong>{metrics?.verified_pct ?? 0}%</strong>
-              </div>
-              <div className="report-quickfact">
-                <span>Run mode</span>
-                <strong>{analysis.analysis_mode.replace('_', ' ')}</strong>
-              </div>
-              <div className="report-quickfact">
-                <span>Claims checked</span>
-                <strong>{claimVerification?.claims.length ?? 0}</strong>
-              </div>
-            </div>
-          </aside>
+          <div style={{ flexShrink: 0, textAlign: 'right' }}>
+            <div style={{ fontSize: 32, fontFamily: 'var(--font-instrument-serif), serif', lineHeight: 1, color: 'var(--text)' }}>{latestScore}</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>quality score</div>
+          </div>
         </div>
-      </section>
+      </div>
 
-      <div className="report-editorial-grid">
-        <div className="report-main-column">
-          <section className="panel report-module">
-            <div className="panel-head">
-              <span className="panel-title">Executive Brief</span>
-              <span className="panel-action">iteration {analysis.iteration}/{analysis.max_iterations}</span>
-            </div>
-            <div className="report-brief-grid">
-              <article className="report-brief-card">
-                <span className="report-section-label">What happened</span>
-                <p>{sentimentReport?.overview || 'No structured overview was returned for this report.'}</p>
-              </article>
-              <article className="report-brief-card accent">
-                <span className="report-section-label">Why it matters</span>
-                <p>
-                  {analysis.quality.feedback || analysis.quality_feedback || 'Quality feedback will appear here after a completed run.'}
-                </p>
-              </article>
-            </div>
-          </section>
+      {/* Body: main + sidebar */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 220px', gap: 0 }}>
 
+        {/* Main column */}
+        <div style={{ borderRight: '1px solid var(--border)', minWidth: 0 }}>
+
+          {/* Insights */}
           {sentimentReport?.actionable_insights?.length ? (
-            <section className="panel report-module">
-              <div className="panel-head">
-                <span className="panel-title">Action Agenda</span>
-                <span className="panel-action">{sentimentReport.actionable_insights.length} recommendations</span>
+            <div style={{ borderBottom: '1px solid var(--border)', padding: '16px 24px' }}>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: 10 }}>
+                Recommendations
               </div>
-              <div className="action-agenda-grid">
+              <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
                 {sentimentReport.actionable_insights.map((insight, index) => (
-                  <article className={`action-agenda-card ${classifyInsightTone(insight, index)}`} key={index}>
-                    <div className="action-agenda-head">
-                      <span className="action-agenda-index">0{index + 1}</span>
-                      <span className="action-agenda-tag">{classifyInsightTone(insight, index)}</span>
-                    </div>
-                    <p>{insight}</p>
-                  </article>
+                  <li key={index} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: 10, fontFamily: 'var(--font-dm-mono), monospace', color: 'var(--muted)', paddingTop: 2, flexShrink: 0, minWidth: 16 }}>
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <span style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.5 }}>{insight}</span>
+                  </li>
                 ))}
-              </div>
-            </section>
+              </ol>
+            </div>
           ) : null}
 
+          {/* Sources */}
           {sentimentReport?.source_signals?.length ? (
-            <section className="panel report-module">
-              <div className="panel-head">
-                <span className="panel-title">Evidence Ledger</span>
-                <span className="panel-action">linked sources</span>
+            <div style={{ borderBottom: '1px solid var(--border)' }}>
+              <div style={{ padding: '12px 24px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)' }}>Sources</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>{sentimentReport.source_signals.length}</span>
               </div>
-              <div className="evidence-ledger">
-                {sentimentReport.source_signals.map((signal, index) => (
-                  <article className="evidence-card" key={`${signal.source}-${index}`}>
-                    <div className="evidence-card-head">
-                      <div>
-                        <h3>{signal.title || signal.source}</h3>
-                        <p>{signal.summary}</p>
-                      </div>
-                      <span className={`report-status-pill ${signal.verification === 'verified' ? 'verified' : 'flagged'}`}>
-                        {signal.verification}
-                      </span>
+              {sentimentReport.source_signals.map((signal, index) => (
+                <div className="signal-item" key={`${signal.source}-${index}`} style={{ padding: '10px 24px' }}>
+                  <div className={`signal-dot ${signal.verification === 'unverified' ? 'high' : signal.sentiment === 'Negative' ? 'medium' : 'low'}`}></div>
+                  <div className="signal-content">
+                    <div className="signal-text" style={{ fontSize: 13, whiteSpace: 'normal' }}>{signal.summary}</div>
+                    <div className="signal-meta" style={{ marginTop: 4 }}>
+                      {signal.url
+                        ? <a className="source-link" href={signal.url} target="_blank" rel="noreferrer">{signal.source}</a>
+                        : <span className="signal-source">{signal.source}</span>
+                      }
+                      <span className="signal-time">{signal.sentiment}</span>
+                      <span className="signal-time">{signal.credibility_score ?? 0}/100</span>
+                      <span className={`report-badge ${signal.verification === 'verified' ? 'verified' : 'flagged'}`}>{signal.verification}</span>
                     </div>
-                    <div className="evidence-card-meta">
-                      <span className="evidence-chip">S{signal.source_index}</span>
-                      <span className={`evidence-chip ${signal.sentiment.toLowerCase()}`}>{signal.sentiment}</span>
-                      <span className="evidence-chip">{signal.credibility}</span>
-                      <span className="evidence-chip">{signal.credibility_score}/100 credibility</span>
-                    </div>
-                    <div className="evidence-card-footer">
-                      <span className="evidence-source-name">{signal.source}</span>
-                      {signal.url ? (
-                        <a className="topbar-btn" href={signal.url} target="_blank" rel="noreferrer">Open source</a>
-                      ) : (
-                        <span className="report-status-pill pending">no link</span>
-                      )}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {claimVerification?.checked ? (
-            <section className="panel report-module">
-              <div className="panel-head">
-                <span className="panel-title">Claim Grounding Map</span>
-                <span className="panel-action">{claimVerification.model}</span>
-              </div>
-              <div className="evidence-ledger">
-                {claimVerification.claims.map(claim => (
-                  <article className="evidence-card" key={claim.claim_id}>
-                    <div className="evidence-card-head">
-                      <div>
-                        <h3>{claim.claim_type}</h3>
-                        <p>{claim.text}</p>
-                      </div>
-                      <span className={`report-status-pill ${claim.support_status === 'supported' ? 'verified' : claim.support_status === 'contradicted' ? 'flagged' : 'pending'}`}>
-                        {claim.support_status}
-                      </span>
-                    </div>
-                    {claim.evidence_links.length ? (
-                      <div style={{ display: 'grid', gap: 10 }}>
-                        {claim.evidence_links.map(link => (
-                          <div key={`${claim.claim_id}-${link.source_index}`} style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 12 }}>
-                              <strong>{link.title}</strong>
-                              <span>{link.support_label} · {Math.round(link.support_score * 100)}</span>
-                            </div>
-                            <div style={{ marginTop: 6, fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>{link.rationale}</div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="report-story-note">No mapped evidence links were preserved for this claim.</p>
-                    )}
-                  </article>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {evidenceSufficiency?.checked ? (
-            <section className="panel report-module">
-              <div className="panel-head">
-                <span className="panel-title">Evidence Gate Snapshot</span>
-                <span className="panel-action">{evidenceSufficiency.passed ? 'passed' : 'hold'}</span>
-              </div>
-              <div className="report-risk-grid">
-                <article className="report-risk-card">
-                  <span className="report-section-label">Coverage</span>
-                  <div className="report-note-list">
-                    <div className="report-note-item">{evidenceSufficiency.source_count} ranked sources</div>
-                    <div className="report-note-item">{evidenceSufficiency.unique_domain_count} unique domains</div>
-                    <div className="report-note-item">{evidenceSufficiency.official_source_count} official sources</div>
-                  </div>
-                </article>
-                <article className="report-risk-card">
-                  <span className="report-section-label">Gate reasons</span>
-                  {evidenceSufficiency.reasons.length ? (
-                    <div className="report-note-list">
-                      {evidenceSufficiency.reasons.map(reason => (
-                        <div className="report-note-item" key={reason}>{reason}</div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="report-story-note">This run had enough evidence to continue into synthesis.</p>
-                  )}
-                </article>
-              </div>
-            </section>
-          ) : null}
-
-          {(blockingIssues.length || knowledgeGaps.length) ? (
-            <section className="panel report-module">
-              <div className="panel-head">
-                <span className="panel-title">Risks And Gaps</span>
-                <span className="panel-action">review before escalation</span>
-              </div>
-              <div className="report-risk-grid">
-                <article className="report-risk-card critical">
-                  <span className="report-section-label">Blocking issues</span>
-                  {blockingIssues.length ? (
-                    <div className="report-note-list">
-                      {blockingIssues.map(issue => (
-                        <div className="report-note-item" key={issue}>{issue}</div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="report-story-note">No blocking issues were flagged for this run.</p>
-                  )}
-                </article>
-                <article className="report-risk-card">
-                  <span className="report-section-label">Knowledge gaps</span>
-                  {knowledgeGaps.length ? (
-                    <div className="report-note-list">
-                      {knowledgeGaps.map(gap => (
-                        <div className="report-note-item" key={gap}>{gap}</div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="report-story-note">No knowledge gaps were returned by the evaluator.</p>
-                  )}
-                </article>
-              </div>
-            </section>
-          ) : null}
-
-          <section className="panel report-module">
-            <div className="panel-head">
-              <span className="panel-title">Full Generated Report</span>
-              <span className="panel-action">raw output</span>
-            </div>
-            <div className="report-fulltext-wrap">
-              <pre className="analysis-report-text">{analysis.final_report}</pre>
-            </div>
-          </section>
-        </div>
-
-        <div className="report-side-column">
-          <section className="panel report-side-panel">
-            <div className="panel-head">
-              <span className="panel-title">Sentiment Mix</span>
-              <span className="panel-action">distribution</span>
-            </div>
-            <div className="report-balance">
-              {sentimentRows.map(row => (
-                <div className="report-balance-row" key={row.label}>
-                  <div className="report-balance-label">
-                    <span>{row.label}</span>
-                    <strong>{row.value}%</strong>
-                  </div>
-                  <div className="report-balance-track">
-                    <div className={`report-balance-fill ${row.tone}`} style={{ width: `${row.value}%` }}></div>
                   </div>
                 </div>
               ))}
             </div>
-          </section>
+          ) : null}
 
-          <section className="panel report-side-panel">
-            <div className="panel-head">
-              <span className="panel-title">Score Breakdown</span>
-              <span className="panel-action">evaluator</span>
+          {/* Risks & gaps — only if present */}
+          {(blockingIssues.length || knowledgeGaps.length) ? (
+            <div style={{ borderBottom: '1px solid var(--border)', padding: '16px 24px', display: 'grid', gap: 12 }}>
+              <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)' }}>Risks & Gaps</div>
+              {blockingIssues.length ? (
+                <div className="report-note-list">
+                  {blockingIssues.map(issue => <div className="report-note-item" key={issue}>{issue}</div>)}
+                </div>
+              ) : null}
+              {knowledgeGaps.length ? (
+                <div className="report-note-list">
+                  {knowledgeGaps.map(gap => <div className="report-note-item" key={gap}>{gap}</div>)}
+                </div>
+              ) : null}
             </div>
-            <div className="score-breakdown">
-              {breakdown.map(([key, value]) => {
-                const percent = Math.round(value * 100);
-                return (
-                  <div className="score-row" key={key}>
-                    <span className="score-row-label">{formatBreakdownLabel(key)}</span>
-                    <div className="score-row-bar">
-                      <div className="score-row-fill" style={{ width: `${percent}%` }}></div>
-                    </div>
-                    <span className="score-row-val">{percent}</span>
+          ) : null}
+
+          {/* Raw report */}
+          <div style={{ padding: '16px 24px' }}>
+            <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: 10 }}>
+              Full Report
+            </div>
+            <pre className="analysis-report-text" style={{ maxHeight: 320, overflow: 'auto' }}>{analysis.final_report}</pre>
+          </div>
+        </div>
+
+        {/* Sidebar — single panel, no separate sub-panels */}
+        <div style={{ padding: '16px', display: 'grid', gap: 20, alignContent: 'start' }}>
+
+          {/* Sentiment bars */}
+          <div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: 8 }}>Sentiment</div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {sentimentRows.map(row => (
+                <div key={row.label} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 28px', gap: 6, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{row.label}</span>
+                  <div style={{ height: 4, background: 'var(--bg3)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div className={`report-balance-fill ${row.tone}`} style={{ width: `${row.value}%`, height: '100%' }}></div>
                   </div>
-                );
-              })}
+                  <span style={{ fontSize: 11, color: 'var(--text)', textAlign: 'right' }}>{row.value}%</span>
+                </div>
+              ))}
             </div>
-          </section>
+          </div>
 
-          {claimVerification?.contradictions?.length ? (
-            <section className="panel report-side-panel">
-              <div className="panel-head">
-                <span className="panel-title">Contradictions</span>
-                <span className="panel-action">review queue</span>
+          {/* Score breakdown */}
+          {breakdown.length ? (
+            <div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: 8 }}>Score Breakdown</div>
+              <div className="score-breakdown">
+                {breakdown.map(([key, value]) => {
+                  const percent = Math.round(value * 100);
+                  return (
+                    <div className="score-row" key={key}>
+                      <span className="score-row-label">{formatBreakdownLabel(key)}</span>
+                      <div className="score-row-bar">
+                        <div className="score-row-fill" style={{ width: `${percent}%` }}></div>
+                      </div>
+                      <span className="score-row-val">{percent}</span>
+                    </div>
+                  );
+                })}
               </div>
+            </div>
+          ) : null}
+
+          {/* Contradictions */}
+          {claimVerification?.contradictions?.length ? (
+            <div>
+              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: 8 }}>Contradictions</div>
               <div className="report-note-list">
                 {claimVerification.contradictions.map(item => (
-                  <div className="report-note-item" key={`${item.claim_id}-${item.source_index}`}>
+                  <div className="report-note-item" key={`${item.claim_id}-${item.source_index}`} style={{ fontSize: 11 }}>
                     {item.claim_text} ({item.source_title})
                   </div>
                 ))}
               </div>
-            </section>
+            </div>
           ) : null}
 
-          <section className="panel report-side-panel">
-            <div className="panel-head">
-              <span className="panel-title">Run Facts</span>
-              <span className="panel-action">system state</span>
+          {/* Run metadata */}
+          <div>
+            <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', marginBottom: 8 }}>Run Info</div>
+            <div style={{ display: 'grid', gap: 6 }}>
+              {[
+                { label: 'Mode', value: analysis.analysis_mode.replace('_', ' ') },
+                { label: 'Signals', value: String(metrics?.signal_count ?? 0) },
+                { label: 'Verified', value: `${metrics?.verified_pct ?? 0}%` },
+                { label: 'Misinfo risk', value: `${metrics?.misinfo_risk_pct ?? 0}%` },
+                { label: 'Evidence gate', value: evidenceSufficiency?.checked ? (evidenceSufficiency.passed ? 'passed' : 'hold') : 'n/a' },
+                { label: 'Memory', value: analysis.memory_saved ? 'saved' : analysis.memory_duplicate ? 'duplicate' : 'skipped' },
+              ].map(row => (
+                <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                  <span style={{ color: 'var(--muted)' }}>{row.label}</span>
+                  <strong style={{ fontWeight: 500 }}>{row.value}</strong>
+                </div>
+              ))}
             </div>
-            <div className="report-facts-list">
-              <div className="report-fact-row">
-                <span>Saved at</span>
-                <strong>{formatUpdatedAt(report.saved_at)}</strong>
-              </div>
-              <div className="report-fact-row">
-                <span>Monitoring window</span>
-                <strong>{analysis.monitoring_window}</strong>
-              </div>
-              <div className="report-fact-row">
-                <span>Memory write</span>
-                <strong>{analysis.memory_saved ? 'saved' : analysis.memory_duplicate ? 'duplicate' : 'skipped'}</strong>
-              </div>
-              <div className="report-fact-row">
-                <span>Misinformation risk</span>
-                <strong>{metrics?.misinfo_risk_pct ?? 0}%</strong>
-              </div>
-              <div className="report-fact-row">
-                <span>Evidence gate</span>
-                <strong>{evidenceSufficiency?.checked ? (evidenceSufficiency.passed ? 'passed' : 'hold') : 'n/a'}</strong>
-              </div>
-            </div>
-          </section>
+          </div>
+
         </div>
       </div>
     </div>
