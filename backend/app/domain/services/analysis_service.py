@@ -16,6 +16,7 @@ from app.schemas.analysis_schema import (
     MemoryItem,
     QualityResult,
     SentimentReport,
+    SpikeDetectionResult,
 )
 
 
@@ -32,7 +33,7 @@ def _runtime_options(analysis_mode: AnalysisMode) -> dict[str, Any]:
             "source_char_limit": 1800,
             "enable_roberta": False,
             "sync_learning": False,
-            "rerank_top_k": min(settings.RAG_RERANK_TOP_K, 6),
+            "rerank_top_k": min(settings.RAG_RERANK_TOP_K, 10),
         }
 
     return {
@@ -199,6 +200,12 @@ class AnalysisService:
             "claim_verification": {},
             "citation_validation": {},
             "cycle_trace": [],
+            "spike_detection": {},
+            "spike_score": 0.0,
+            "spike_level": "BASELINE",
+            "spike_signals": [],
+            "spike_history_count": 0,
+            "spike_detection_error": None,
         }
 
     def _to_response(self, result: dict[str, Any], include_diagnostics: bool) -> AnalysisResponse:
@@ -231,6 +238,9 @@ class AnalysisService:
                 citation_validation=CitationValidationResult.model_validate(
                     result.get("citation_validation") or {}
                 ),
+                spike_detection=SpikeDetectionResult.model_validate(
+                    result.get("spike_detection") or {}
+                ) if result.get("spike_detection") else None,
             )
 
         return AnalysisResponse(
@@ -251,6 +261,9 @@ class AnalysisService:
             memory_saved=result.get("memory_saved", False),
             memory_duplicate=result.get("memory_duplicate", False),
             diagnostics=diagnostics,
+            spike_detection=SpikeDetectionResult.model_validate(
+                result.get("spike_detection") or {}
+            ) if result.get("spike_detection") else None,
             quality_score=quality.score,
             quality_breakdown=quality.breakdown,
             quality_passed=quality.passed,
